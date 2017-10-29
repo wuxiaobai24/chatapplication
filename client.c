@@ -12,9 +12,11 @@
 #define BUFF_SZ 100
 
 char mypipename[BUFF_SZ];
+int logged = 0;
+char user_name[100];
 
 void handler(int sig) {
-//	unlink(mypipename);
+	unlink(mypipename);
 	exit(1);
 }
 int open_server_fifo(const char *fifo_name) {
@@ -34,7 +36,9 @@ int open_server_fifo(const char *fifo_name) {
 }
 
 void register_client(int reg_fifo_fd,int my_fifo,char *myfifoname);
-
+void login_client(int login_fifo_fd,int my_fifo,char *myfifoname);
+void receive_information();
+void chat_client(int chat_fifo_fd,int myfifo,char *myfifoname);
 int main(int argc,char *argv[] ) {
 	int res;
 	int fifo_fd,my_fifo;
@@ -42,7 +46,7 @@ int main(int argc,char *argv[] ) {
 	CLIENTINFO info;
 	char buffer[BUFF_SZ];
 	int reg_fifo_fd,login_fifo_fd,chat_fifo_fd;
-	
+	int action;
 	signal(SIGKILL,handler);
 	signal(SIGINT,handler);
 	signal(SIGTERM,handler);
@@ -68,7 +72,21 @@ int main(int argc,char *argv[] ) {
 		printf("Could not open %s for read only access\n",mypipename);	//FIFONAME?
 		exit(EXIT_FAILURE);
 	}
-	register_client(reg_fifo_fd,my_fifo,mypipename);
+	
+	while(1) {
+		printf("1.Register\n");
+		printf("2.Login\n");
+		printf("3.Chat\n");
+		if (logged){
+			printf("User %s logged\n",user_name);
+			receive_information(my_fifo);
+		}
+		printf(">");
+		scanf("%d",&action);
+		if (action==1) register_client(reg_fifo_fd,my_fifo,mypipename);
+		else if (action == 2) login_client(login_fifo_fd,my_fifo,mypipename);
+		else if (action == 3) chat_client(chat_fifo_fd,my_fifo,mypipename);
+	}
 	return 0;
 	//construct client info
 	strcpy(info.myfifo,mypipename);
@@ -100,21 +118,102 @@ int main(int argc,char *argv[] ) {
 void register_client(int reg_fifo_fd,int my_fifo,char *myfifoname) {
 	char buffer[100];
 	REGMSG reg_msg;
-	int res;
+	int res,sig;
 
+	//construction register msg
 	printf("Please enter you name:\n");
 	scanf("%s",reg_msg.name);
 	printf("Please enter you passwd:\n");
 	scanf("%s",reg_msg.passwd);
-	//reg_msg.myfifo = myfifoname;
 	strcpy(reg_msg.myfifo,myfifoname);
+	
 	write(reg_fifo_fd,&reg_msg,sizeof(REGMSG) );
 	while(1) {
-		res = read(my_fifo,buffer,BUFF_SZ);
+		res = read(my_fifo,&sig,sizeof(int));
 		if (res > 0) {
-			printf("Received from server:%s\n",buffer);
+			if (sig == 10 )
+				printf("Register failure!!\n");
+			else if (sig == 11)
+				printf("Register successfully!!\n");
+			else
+				printf("Server error:%d\n",sig);
+			return;
+		}
+	}
+}
+
+void login_client(int login_fifo_fd,int my_fifo,char *myfifoname) {
+	LOGINMSG login_msg;
+	char buffer[BUFF_SZ];
+	int sig;
+	int res;
+
+	printf("Please enter your name:\n");
+	scanf("%s",login_msg.name);
+	printf("Please enter your passwd:\n");
+	scanf("%s",login_msg.passwd);
+	strcpy(login_msg.myfifo,myfifoname);
+	write(login_fifo_fd,&login_msg,sizeof(LOGINMSG) );
+
+
+	printf("wait form login server\n");
+	while(1) {
+		res = read(my_fifo,&sig,sizeof(int));
+		if (res != 0) {
+			if (sig == 20)
+				printf("Login faliure:\tCan not find the user %s\n",login_msg.name);
+			else if (sig == 21)
+				printf("Login faliure:\tPassword error!!\n");
+			else if (sig == 22)
+				printf("Login faliure:\tUser %s is logged\n",login_msg.name);
+			else if (sig == 23) {
+				printf("Login successfully\n");
+				strcpy(user_name,login_msg.name);
+				logged = 1;
+			}
+			else
+				printf("Server error:%d\n",sig);
 			break;
 		}
 	}
 }
 
+void chat_client(int chat_fifo_fd,int my_fifo,char *myfifoname) {
+	int sig;
+	int res;
+	CHATMSG msg;
+	strcpy(msg.fromfifo,myfifoname);
+	printf("From:%s\nTo:",user_name);
+	scanf("%s",msg.to);
+	printf("\nMessage:\n");
+	scanf("%s",msg.message);
+	write(chat_fifo_fd,&msg,sizeof(CHATMSG) );
+	while(1) {
+		res = read(my_fifo,&sig,sizeof(int) );
+		if (res != 0) break; 
+	}
+	if (sig & 1) printf("Error: Server can not find you!!\nMaybe you are not logged!\n");
+	if (sig & 2) printf("Error: Can find %s\n",msg.to);
+	if (sig & 4) printf("Error: User %s is not logged!\n",msg.to);
+	if (sig == 0) printf("Send message successfully\n");
+}
+void receive_information(int myfifo) {
+	int res;
+	int sig = 0;
+	int i = 0;
+	CHATMSG msg;
+	printf("Receive_information\n");
+	for(i = 0;i < 1000;i++) {
+		res = read(myfifo,&sig,sizeof(int));
+		if (res > 0 && sig == 9) break;
+	}
+	printf("sig:%d",sig);
+	if (sig != 9) return ;
+	for(i = 0;i < 1000;i++) {
+		res = read(myfifo,&msg,sizeof(CHATMSG) );
+		if (res > 0) {
+			printf("From:%s\nTo:%s\nMessage:\n%s\n",msg.fromfifo,msg.to,msg.message);
+			break;
+		}
+	}
+}

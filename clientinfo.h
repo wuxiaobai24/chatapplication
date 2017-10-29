@@ -20,11 +20,13 @@ typedef struct{
 typedef struct{
 	char name[100];
 	char passwd[100];
+	char myfifo[100];
 }LOGINMSG, *LOGINMSGPTR;
 
 typedef struct {
-	char target[100];
+	char to[100];
 	char message[100];
-} CHATMSG,CHATMSGPTR;
+	char fromfifo[100];
+} CHATMSG, *CHATMSGPTR;
 
 #endif
