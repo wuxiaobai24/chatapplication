@@ -41,6 +41,7 @@ int open_server_fifo(const char *fifo_name) {
 }
 
 void register_client();
+void login_client();
 
 int main(int argc,char *argv[] ) {
 	int res;
@@ -63,7 +64,7 @@ int main(int argc,char *argv[] ) {
 		printf(">");
 		scanf("%d",&action);
 		if (action==1) register_client();
-		else if (action == 2); 
+		else if (action == 2) login_client();
 		else if (action == 3);
 	}
 	return 0;
@@ -73,7 +74,7 @@ void register_client() {
     USER user;
     int res;
     CHATMSG msg;
-
+    int fd;
 	//construction register msg
     int flag = 0;
     do {
@@ -95,20 +96,52 @@ void register_client() {
         return ;
     }
     //open client_fifo
-    client_fifo_fd = open(mypipename,O_RDONLY | O_NONBLOCK);
-    if (client_fifo_fd == -1) {
+    fd = open(mypipename,O_RDONLY | O_NONBLOCK);
+    if (fd == -1) {
         printf("Could not open %s.\n",mypipename);
         return ;
     }
     
-    printf("Send to Register Message to Server\n");
+    printf("Send The Register Message to Server\n");
 	
     write(reg_fifo_fd,&user,sizeof(USER) );
     while(1) {
         res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
         if (res != 0) {
             print_chat_msg(&msg);
-            return ;
+            break;
+        }
+    }
+    close(fd);
+}
+
+void login_client() {
+    USER user;
+    int res;
+    CHATMSG msg;
+    int flag = 0;
+    do {
+        printf("Pleace enter your name:\n");
+        scanf("%s",user.username);
+        sprintf(mypipename,"%s%s",CLIENT_PREFIX,user.username);
+        flag = 1;
+    } while( access(mypipename,F_OK) == -1 );
+    client_fifo_fd = open(mypipename,O_RDONLY | O_NONBLOCK);
+    if (client_fifo_fd == -1) {
+        printf("Could noy open %s.\n",mypipename);
+        return ;
+    }
+    
+    printf("Plecase enter you password:\n");
+    scanf("%s",user.passwd);
+
+    printf("Send The Login Message to Server.\n");
+    write(login_fifo_fd,&user,sizeof(USER) );
+    while(1) {
+        res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
+        if (res != 0) {
+            print_chat_msg(&msg);
+            break;
         }
     }
 }
