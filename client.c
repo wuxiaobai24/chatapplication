@@ -14,13 +14,15 @@
 
 char mypipename[BUFF_SZ];
 int logged = 0;
-char user_name[100];
+char username[100];
 int reg_fifo_fd,login_fifo_fd,chat_fifo_fd;
-int client_fifo_fd;
+int client_fifo_fd = 0;
+int login = 0;
+
 
 void print_chat_msg(CHATMSGPTR msg_ptr);
 void handler(int sig) {
-	unlink(mypipename);
+	//unlink(mypipename);
 	exit(1);
 }
 
@@ -42,6 +44,8 @@ int open_server_fifo(const char *fifo_name) {
 
 void register_client();
 void login_client();
+void chat_client();
+void receive_msg();
 
 int main(int argc,char *argv[] ) {
 	int res;
@@ -65,7 +69,8 @@ int main(int argc,char *argv[] ) {
 		scanf("%d",&action);
 		if (action==1) register_client();
 		else if (action == 2) login_client();
-		else if (action == 3);
+		else if (action == 3) chat_client();
+        receive_msg();
 	}
 	return 0;
 }
@@ -138,10 +143,7 @@ void login_client() {
     scanf("%s",user.passwd);
 
     printf("Send The Login Message to Server.\n");
-//    printf("LOGINMSG:\n%s\n%s\n",user.username,user.passwd);
-//    printf("Pipename:%s\n",mypipename);
     res = write(login_fifo_fd,&user,sizeof(USER) );
-//    printf("Res:%d\n",res);
     while(1) {
         res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
         if (res > 0) {
@@ -149,8 +151,41 @@ void login_client() {
             break;
         }
     }
+    if (strcmp(msg.message,"Login Successfully!!") == 0) {
+        login = 1;
+        strcpy(username,user.username);
+    }
+    else login = 0;
 }
 
 void print_chat_msg(CHATMSGPTR msg_ptr) {
     printf("\nFrom:%s\nMSG:%s\n",msg_ptr->from,msg_ptr->message);
+}
+
+void chat_client() {
+    if (login == 0) {
+        printf("You are not login.\n");
+        return ;
+    }
+    int res;
+    CHATMSG msg;
+    printf("\n\nFrom:%s\n",username);
+    strcpy(msg.from,username);
+    printf("To:\n");
+    scanf("%s",msg.to);
+    printf("Meseage:\n");
+    scanf("%s",msg.message);
+    write(chat_fifo_fd,&msg,sizeof(CHATMSG));
+}
+
+void receive_msg() {
+    if (login == 0) return ;
+    int res,i;
+    CHATMSG msg;
+    for(i = 0;i < 100;i++) {
+        res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
+        if (res > 0) {
+            print_chat_msg(&msg);
+        }
+    }
 }

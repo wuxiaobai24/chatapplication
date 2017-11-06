@@ -20,6 +20,13 @@ void handler(int sig) {
 	unlink(REG_FIFO_NAME);
 	unlink(LOGIN_FIFO_NAME);
 	unlink(CHAT_FIFO_NAME);
+    int i = 0;
+    char buf[100];
+    while(i < end) {
+        sprintf(buf,"%S%S",CLIENT_PREFIX,users[i].username);
+        unlink(buf);
+        i++;
+    }
 	exit(1);
 }
 
@@ -120,9 +127,9 @@ void login_client() {
     CHATMSG msg = {"","Login Successfully!!","Server"};
     while(1) {
         res = read(login_fifo_fd,&user,sizeof(USER) );
-        if (res != 0) break; 
+        if (res > 0) break; 
     }
-    
+    printf("Read over\n");    
     sprintf(mypipename,"%s%s",CLIENT_PREFIX,user.username);
     if (open_fifo(mypipename,O_WRONLY | O_NONBLOCK,&fd) == 0) {
         printf("Login Failure\n");
@@ -151,8 +158,10 @@ void login_client() {
 
 int find_user(USER *user_ptr) {
     int i = 0;
-    while(i < user_end)
+    while(i < user_end) {
         if (strcmp(user_ptr->username,users[i].username) == 0) return i;
+        i++;
+    }
     return -1;
 }
 
@@ -161,7 +170,36 @@ int check_passwd(USER *user_ptr,int user_id) {
 }
 
 void chat_client() {
+    printf("Chat client\n");
+    int res,fd,isFailure = 0;
+    CHATMSG msg;
+    char fifoname[100];
+    while(1) {
+        res = read(chat_fifo_fd,&msg,sizeof(CHATMSG) );
+        if (res > 0) break;
+    }
+    sprintf(fifoname,"%s%s",CLIENT_PREFIX,msg.to);
+    if (open_fifo(fifoname,O_WRONLY | O_NONBLOCK, &fd) == 0) {
+        printf("Chat Failure\n");
+        isFailure = 1;
+    }
+    if (isFailure == 0) {
+        write(fd,&msg,sizeof(CHATMSG));
+        close(fd);
+    }
 
+    sprintf(fifoname,"%s%s",CLIENT_PREFIX,msg.from);
+    if (open_fifo(fifoname,O_WRONLY | O_NONBLOCK, &fd) == 0) {
+        printf("Chat Failure\n");
+        return ;
+    }
+
+    if (isFailure) sprintf(msg.message,"Send Message Failure\n");
+    else sprintf(msg.message,"Send Message Successfully\n");
+    strcpy(msg.to,msg.from);
+    strcpy(msg.from,"Server");
+    write(fd,&msg,sizeof(CHATMSG) );
+    close(fd);
 }
 
 
