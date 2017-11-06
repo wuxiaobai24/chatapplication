@@ -4,29 +4,17 @@
 #define REG_FIFO_NAME "/home/wukunhan2015170297/chatapplication/data/server_fifo/server_regiser_fifo"
 #define LOGIN_FIFO_NAME "/home/wukunhan2015170297/chatapplication/data/server_fifo/server_login_fifo"
 #define CHAT_FIFO_NAME "/home/wukunhan2015170297/chatapplication/data/server_fifo/server_chat_fifo"
-
-typedef struct{
-	char myfifo[100];
-	char name[100];
-	int id;
-} CLIENTINFO,* CLIENTINFOPTR;
-
-typedef struct{
-	char name[100];
-	char passwd[100];
-	char myfifo[100];
-} REGMSG, *REGMESPTR;
-
-typedef struct{
-	char name[100];
-	char passwd[100];
-	char myfifo[100];
-}LOGINMSG, *LOGINMSGPTR;
+#define CLIENT_PREFIX "/home/wukunhan2015170297/chatapplication/data/client_fifo/clinet_fifo_"
 
 typedef struct {
-	char to[100];
+    char username[20];
+    char passwd[30];
+} USER, *USERPTR;
+
+typedef struct {
+	char to[20];
 	char message[100];
-	char fromfifo[100];
+	char from[20];
 } CHATMSG, *CHATMSGPTR;
 
 #endif
