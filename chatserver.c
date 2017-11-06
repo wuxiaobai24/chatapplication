@@ -68,16 +68,17 @@ int main() {
 	open_fifo(REG_FIFO_NAME,O_RDONLY,&reg_fifo_fd);
 	open_fifo(LOGIN_FIFO_NAME,O_RDONLY,&login_fifo_fd);
 	open_fifo(CHAT_FIFO_NAME,O_RDONLY ,&chat_fifo_fd);
-	
+    printf("%d %d %d\n",reg_fifo_fd,login_fifo_fd,chat_fifo_fd);	
+    FD_ZERO(&my_read);
     FD_SET(reg_fifo_fd,&my_read);
     FD_SET(login_fifo_fd,&my_read);
     FD_SET(chat_fifo_fd,&my_read);
 
 	printf("\nServer is rarin to go\n");
     while(select(chat_fifo_fd + 1,&my_read,NULL,NULL,NULL) == 1) {
-        
-        if (FD_ISSET(reg_fifo_fd,&my_read)) register_client();
+         
         if (FD_ISSET(login_fifo_fd, &my_read)) login_client();
+        if (FD_ISSET(reg_fifo_fd,&my_read)) register_client();
         if (FD_ISSET(chat_fifo_fd,&my_read)) chat_client();
     }
 	exit(0);

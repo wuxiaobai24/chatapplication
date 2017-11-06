@@ -106,8 +106,8 @@ void register_client() {
 	
     write(reg_fifo_fd,&user,sizeof(USER) );
     while(1) {
-        res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
-        if (res != 0) {
+        res = read(fd,&msg,sizeof(CHATMSG) );
+        if (res > 0) {
             print_chat_msg(&msg);
             break;
         }
@@ -118,7 +118,7 @@ void register_client() {
 void login_client() {
     USER user;
     int res;
-    CHATMSG msg;
+    CHATMSG msg = {"1","2","3"};
     int flag = 0;
     do {
         printf("Pleace enter your name:\n");
@@ -126,7 +126,9 @@ void login_client() {
         sprintf(mypipename,"%s%s",CLIENT_PREFIX,user.username);
         flag = 1;
     } while( access(mypipename,F_OK) == -1 );
+
     client_fifo_fd = open(mypipename,O_RDONLY | O_NONBLOCK);
+
     if (client_fifo_fd == -1) {
         printf("Could noy open %s.\n",mypipename);
         return ;
@@ -136,10 +138,13 @@ void login_client() {
     scanf("%s",user.passwd);
 
     printf("Send The Login Message to Server.\n");
-    write(login_fifo_fd,&user,sizeof(USER) );
+    printf("LOGINMSG:\n%s\n%s\n",user.username,user.passwd);
+    printf("Pipename:%s\n",mypipename);
+    res = write(login_fifo_fd,&user,sizeof(USER) );
+    printf("Res:%d\n",res);
     while(1) {
         res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
-        if (res != 0) {
+        if (res > 0) {
             print_chat_msg(&msg);
             break;
         }
