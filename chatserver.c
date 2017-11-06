@@ -80,6 +80,10 @@ int main() {
         if (FD_ISSET(login_fifo_fd, &my_read)) login_client();
         if (FD_ISSET(reg_fifo_fd,&my_read)) register_client();
         if (FD_ISSET(chat_fifo_fd,&my_read)) chat_client();
+
+        FD_SET(reg_fifo_fd,&my_read);
+        FD_SET(login_fifo_fd,&my_read);
+        FD_SET(chat_fifo_fd,&my_read);
     }
 	exit(0);
 } 
@@ -127,6 +131,9 @@ void login_client() {
     
     //check passwd
     user_id = find_user(&user);
+    printf("User:%s\nPasswd:%s\n",user.username,user.passwd);
+    printf("UserId%d\nUsername:%s\nPasswd:%s\n",user_id,user.username,user.passwd);
+    printf("Check Passwd:%d\n",check_passwd(&user,user_id));
     if (user_id < 0) {
         printf("Can not find %s\n",user.username);
         sprintf(msg.message,"Can not find %s\nMaybe Server is wrong!!\n",user.username);
@@ -150,7 +157,7 @@ int find_user(USER *user_ptr) {
 }
 
 int check_passwd(USER *user_ptr,int user_id) {
-    return strcmp(user_ptr->passwd,users[user_id].passwd);
+    return strcmp(user_ptr->passwd,users[user_id].passwd) == 0;
 }
 
 void chat_client() {

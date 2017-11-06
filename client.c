@@ -138,10 +138,10 @@ void login_client() {
     scanf("%s",user.passwd);
 
     printf("Send The Login Message to Server.\n");
-    printf("LOGINMSG:\n%s\n%s\n",user.username,user.passwd);
-    printf("Pipename:%s\n",mypipename);
+//    printf("LOGINMSG:\n%s\n%s\n",user.username,user.passwd);
+//    printf("Pipename:%s\n",mypipename);
     res = write(login_fifo_fd,&user,sizeof(USER) );
-    printf("Res:%d\n",res);
+//    printf("Res:%d\n",res);
     while(1) {
         res = read(client_fifo_fd,&msg,sizeof(CHATMSG) );
         if (res > 0) {
