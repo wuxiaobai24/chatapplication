@@ -62,14 +62,17 @@ int main(int argc,char *argv[] ) {
 	chat_fifo_fd = open_server_fifo(CHAT_FIFO_NAME);
 	
 	while(1) {
+        printf("0.flush\n");
 		printf("1.Register\n");
 		printf("2.Login\n");
 		printf("3.Chat\n");
+        printf("4.quit\n");
 		printf(">");
 		scanf("%d",&action);
 		if (action==1) register_client();
 		else if (action == 2) login_client();
 		else if (action == 3) chat_client();
+        else if (action == 4) exit(0);
         receive_msg();
 	}
 	return 0;
@@ -79,9 +82,8 @@ void register_client() {
     USER user;
     int res;
     CHATMSG msg;
-    int fd;
-	//construction register msg
-    int flag = 0;
+    int fd,flag = 0;
+
     do {
         if (flag) printf("Username %s is exist\n",user.username);
 	    printf("Please enter you name:\n");
@@ -90,7 +92,7 @@ void register_client() {
         strcat(mypipename,user.username);
         flag = 1;
     } while( access(mypipename,F_OK) != -1);
-
+    
 	printf("Please enter you passwd:\n");
 	scanf("%s",user.passwd);
 
@@ -106,9 +108,7 @@ void register_client() {
         printf("Could not open %s.\n",mypipename);
         return ;
     }
-    
     printf("Send The Register Message to Server\n");
-	
     write(reg_fifo_fd,&user,sizeof(USER) );
     while(1) {
         res = read(fd,&msg,sizeof(CHATMSG) );

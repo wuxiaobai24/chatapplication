@@ -22,8 +22,8 @@ void handler(int sig) {
 	unlink(CHAT_FIFO_NAME);
     int i = 0;
     char buf[100];
-    while(i < end) {
-        sprintf(buf,"%S%S",CLIENT_PREFIX,users[i].username);
+    while(i < user_end) {
+        sprintf(buf,"%s%s",CLIENT_PREFIX,users[i].username);
         unlink(buf);
         i++;
     }
@@ -138,9 +138,9 @@ void login_client() {
     
     //check passwd
     user_id = find_user(&user);
-    printf("User:%s\nPasswd:%s\n",user.username,user.passwd);
-    printf("UserId%d\nUsername:%s\nPasswd:%s\n",user_id,user.username,user.passwd);
-    printf("Check Passwd:%d\n",check_passwd(&user,user_id));
+//    printf("User:%s\nPasswd:%s\n",user.username,user.passwd);
+//    printf("UserId%d\nUsername:%s\nPasswd:%s\n",user_id,user.username,user.passwd);
+//    printf("Check Passwd:%d\n",check_passwd(&user,user_id));
     if (user_id < 0) {
         printf("Can not find %s\n",user.username);
         sprintf(msg.message,"Can not find %s\nMaybe Server is wrong!!\n",user.username);
