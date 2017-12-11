@@ -4,17 +4,90 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "clientinfo.h"
 #include <signal.h>
 #include <stdio.h>
+#include "userlist.h"
 
-#define CLIENT_COUNT 20
 #define BUFF_SZ 100
-int reg_fifo_fd, login_fifo_fd, chat_fifo_fd;
-USER users[CLIENT_COUNT];
-int user_end = 0;
-int login_users[CLIENT_COUNT];
+#define CONFIGURATIONFILE_PATH "/home/wukunhan2015170297/.chatapplication"
+/* if define DEBUG, the server will not call the become_daemon */
+#define DEGUG
 
+/************************************************************************/
+/* global value */
+int reg_fifo_fd, login_fifo_fd, chat_fifo_fd; /* fifo fd */
+userlist_t userlist; /* user list */
+userlist_t logined_userlist; /* logined user list */
+
+/************************************************************************/
+/* function declaration */
+
+/* thread function */
+void *register_func(void *arg);     /* the function for register */
+void *login_func(void *arg);        /* the function for login */
+void *chat_func(void *arg);         /* the function for chat */
+void configuration();               /* read the configuration file and some value */
+void become_daemon();               /* let the server become a daemon process */
+void init_thread();                 /* init three listen thread */
+void listen_loop();                 /* start to listen loop */
+void fatalError(char *prompt);      /* a fatal error which server should exit */
+
+/***********************************************************************/
+/* main function */
+int main (int argc,char **argv) {
+#ifndef DEBUG
+    become_daemon();
+#endif
+    configuration();
+    listen_loop();
+    return 0;
+}
+
+/**********************************************************************/
+/* let server become a daemon process */
+void become_daemon() {
+    pid_t pid;
+    int fd;
+    if ((pid = fork()) < 0) fatalError("become_daemon:fork\n");
+    else if (pid > 0) exit(0); /* the praent process should exit */
+
+    /* child process */
+    /* creates a new session */
+    if (setsid() == -1) fatalError("become_daemon:setsid\n");
+    
+    /* change the work dir to the root dir */
+    if (chdir("/")  != 0) fatalError("become_daemon:chadir\n");
+    
+    /* open the null dev */
+    if ((fd = open("/dev/null",O_RDWR,0)) == -1) {
+        /* open failure */
+        fatalError("become_daemon:open null dev\n");
+    }
+    /* redirect standard output,input and error to null dev */
+    if (dup2(fd,STDIN_FILENO) == -1 ||
+            dup2(fd,STDOUT_FILENO) == -1 ||
+            dup2(fd,STDERR_FILENO) == -1) {
+        fatalError("become_daemon:redurect\n");
+    }
+    if(close(fd) == -1) fatalError("become_daemon:close_null_dev\n");
+
+    /* set file mode creation mask */
+    umask(0027);
+}
+
+void configuration() {
+    int i;
+    char buf[BUFF_SZ];
+    FILE *stream;
+    size_t len = 0; ssize_t res;
+    /* read the configuration file */
+    /* the work dir is root now, so we should use the absolute path*/
+    stream = fopen(CONFIGURATIONFILE_PATH,"r");
+    if (stream == NULL) fatalError("configuration:fopen\n");
+    
+    /* parse configuration */
+
+}
 
 void handler(int sig) {
 	unlink(REG_FIFO_NAME);
@@ -29,10 +102,6 @@ void handler(int sig) {
     }
 	exit(1);
 }
-
-void register_client();
-void login_client();
-void chat_client();
 
 int find_user(USER *user_ptr);
 int check_passwd(USER *user_ptr,int user_id);
