@@ -7,17 +7,35 @@
 #include <signal.h>
 #include <stdio.h>
 #include "userlist.h"
+#include "userfile.h"
+
 
 #define BUFF_SZ 100
 #define CONFIGURATIONFILE_PATH "/home/wukunhan2015170297/.chatapplication"
+#define USERFILE_PATH "/home/wukunhan2015170297/chatapplication/data/userfile"
+
 /* if define DEBUG, the server will not call the become_daemon */
-#define DEGUG
+#define DEBUG
+
+#define TRUE 1
+#define FALSE 0
 
 /************************************************************************/
 /* global value */
-int reg_fifo_fd, login_fifo_fd, chat_fifo_fd; /* fifo fd */
-userlist_t userlist; /* user list */
-userlist_t logined_userlist; /* logined user list */
+userfile_t userfile; /* user list */
+userlist_t userlist; /* logined user list */
+int logined_users_max = 1000;
+
+/* fifo path */
+char register_file_path[BUFF_SZ];
+char login_file_path[BUFF_SZ];
+char sendmsg_file_path[BUFF_SZ];
+
+/* fifo fd */
+int reg_fifo_fd, login_fifo_fd, sendmsg_fifo_fd;
+
+/* thread tid */
+pthread_t register_tid, login_tid, sendmsg_tid;
 
 /************************************************************************/
 /* function declaration */
@@ -27,10 +45,19 @@ void *register_func(void *arg);     /* the function for register */
 void *login_func(void *arg);        /* the function for login */
 void *chat_func(void *arg);         /* the function for chat */
 void configuration();               /* read the configuration file and some value */
+void pass1(int fd,int *lineStart);  /* get the pre line offset */
+void pass2(int fd,int *lineStart);  /* parse the configuration pre line */
+void parseLine(char *buffer,int readCount);
 void become_daemon();               /* let the server become a daemon process */
 void init_thread();                 /* init three listen thread */
 void listen_loop();                 /* start to listen loop */
 void fatalError(char *prompt);      /* a fatal error which server should exit */
+void init();                        /* init the chat server */
+void init_fifo();                   /* init the fifo fd */
+void *login_thread_func(void *);    /* login thread function */
+void *register_thread_func(void *); /* register thread function */
+void *sendmsg_thread_func(void *);   /* sendmsg thread function */
+
 
 /***********************************************************************/
 /* main function */
@@ -39,6 +66,7 @@ int main (int argc,char **argv) {
     become_daemon();
 #endif
     configuration();
+    init();
     listen_loop();
     return 0;
 }
@@ -75,200 +103,172 @@ void become_daemon() {
     umask(0027);
 }
 
+/**********************************************************************/
+/* read configuration file and parse configuration */
+
 void configuration() {
-    int i;
-    char buf[BUFF_SZ];
-    FILE *stream;
-    size_t len = 0; ssize_t res;
+    int res,fd;
+    int lineStart[5]; /* the configuration file have only 4 line. */
+    lineStart[0] = 0; 
+
     /* read the configuration file */
     /* the work dir is root now, so we should use the absolute path*/
-    stream = fopen(CONFIGURATIONFILE_PATH,"r");
-    if (stream == NULL) fatalError("configuration:fopen\n");
-    
+    if ((fd = open(CONFIGURATIONFILE_PATH,O_RDONLY)) == -1)
+            fatalError("configuration:open\n");
     /* parse configuration */
+    /* the file pathname should less than 100 character */
+    pass1(fd,lineStart);  //get pre line offset
+    pass2(fd,lineStart); // parse the configuration
 
+    if (res == -1) fatalError("configuration:read\n");
 }
 
-void handler(int sig) {
-	unlink(REG_FIFO_NAME);
-	unlink(LOGIN_FIFO_NAME);
-	unlink(CHAT_FIFO_NAME);
-    int i = 0;
-    char buf[100];
-    while(i < user_end) {
-        sprintf(buf,"%s%s",CLIENT_PREFIX,users[i].username);
-        unlink(buf);
-        i++;
-    }
-	exit(1);
-}
+/*********************************************************************/
+/* get pre line offset in fd*/
 
-int find_user(USER *user_ptr);
-int check_passwd(USER *user_ptr,int user_id);
+void pass1(int fd,int *lineStart) {
+    int charRead,i;
+    char buffer[BUFF_SZ];
+    int fileOffset = 0;
+    int lineCount = 1;
+    while(TRUE) {
+        charRead = read(fd,buffer,BUFF_SZ);
+        if (charRead == 0) break;
+        if (charRead == 1) fatalError("pass1");
 
-void init_server_fifo(const char *fifo_name) {
-	int res;
-	if (access(fifo_name,F_OK) == -1) {
-		res = mkfifo(fifo_name,0777);
-		if (res != 0) {
-			printf("FIFO %s was not created\n",fifo_name);
-			exit(EXIT_FAILURE);
-		}
-	}
-}
-
-int open_fifo(const char *fifo_name,int flag,int *fd) {
-	*fd = open(fifo_name,flag);
-	if (*fd == -1) {
-		printf("\nCould not open %s\n in flag %d\n",fifo_name,flag);
-		return 0;
-	}
-	return 1;
-}
-
-int main() {
-	int res,i,fifo_fd,fd1;
-	char buffer[100];
-	fd_set my_read;
-
-	signal(SIGKILL,handler);
-	signal(SIGINT,handler);
-	signal(SIGTERM,handler);
-
-	//init server fifo
-	init_server_fifo(REG_FIFO_NAME);
-	init_server_fifo(LOGIN_FIFO_NAME);
-	init_server_fifo(CHAT_FIFO_NAME);
-
-	//open FIFO for reading
-	open_fifo(REG_FIFO_NAME,O_RDONLY,&reg_fifo_fd);
-	open_fifo(LOGIN_FIFO_NAME,O_RDONLY,&login_fifo_fd);
-	open_fifo(CHAT_FIFO_NAME,O_RDONLY ,&chat_fifo_fd);
-    printf("%d %d %d\n",reg_fifo_fd,login_fifo_fd,chat_fifo_fd);	
-    FD_ZERO(&my_read);
-    FD_SET(reg_fifo_fd,&my_read);
-    FD_SET(login_fifo_fd,&my_read);
-    FD_SET(chat_fifo_fd,&my_read);
-
-	printf("\nServer is rarin to go\n");
-    while(select(chat_fifo_fd + 1,&my_read,NULL,NULL,NULL) == 1) {
-         
-        if (FD_ISSET(login_fifo_fd, &my_read)) login_client();
-        if (FD_ISSET(reg_fifo_fd,&my_read)) register_client();
-        if (FD_ISSET(chat_fifo_fd,&my_read)) chat_client();
-
-        FD_SET(reg_fifo_fd,&my_read);
-        FD_SET(login_fifo_fd,&my_read);
-        FD_SET(chat_fifo_fd,&my_read);
-    }
-	exit(0);
-} 
-
-void register_client() {
-    printf("Register Client\n");
-    int res;
-    int fd;
-    char fifoname[BUFF_SZ];
-
-    CHATMSG msg = {"","Welcome!!","Server"};
-    while(1) {
-        res = read(reg_fifo_fd,&users[user_end],sizeof(USER) );
-       if (res != 0) {
-            strcpy(fifoname,CLIENT_PREFIX);
-            strcat(fifoname,users[user_end].username);
-         
-            if(open_fifo(fifoname,O_WRONLY | O_NONBLOCK,&fd) == 0) {
-                printf("Register Failure\n");
-                return ;
-            }
-            strcpy(msg.to, users[user_end].username);
-            write(fd,&msg,sizeof(CHATMSG) );
-            user_end++;
-            return ;
+        for(i = 0;i < charRead;i++) {
+            fileOffset++;
+            if (buffer[i] == '\n') lineStart[lineCount++] = fileOffset;
         }
+        if (lineCount == 4) break; /* we just read the first four line */
+    }
+    if (lineCount != 4) lineStart[lineCount] = fileOffset;
+}
+
+/*******************************************************************/
+/* prase the configuration pre line */
+
+void pass2(int fd,int *lineStart) {
+    int i, charRead;
+    char buffer[BUFF_SZ]; // so pre line can not be longer than BUFF_SZ
+    for(i = 0;i < 4;i++) {
+        lseek(fd,lineStart[i],SEEK_SET);
+        charRead = read(fd, buffer, lineStart[i+1] - lineStart[i]);
+        buffer[charRead] = '\0';    //convenient to strcpy 
+        parseLine(buffer,charRead);
     }
 }
-void login_client() {
-    printf("Login Client\n");
-    int res,fd,user_id;
-    USER user;
-    char mypipename[100];
-    CHATMSG msg = {"","Login Successfully!!","Server"};
-    while(1) {
-        res = read(login_fifo_fd,&user,sizeof(USER) );
-        if (res > 0) break; 
+
+/***************************************************************/
+
+void parseLine(char *buffer,int charRead) {
+    if(charRead < 2) return;
+    switch(buffer[0]) {
+        case 'L':
+            if(buffer[1] != ':') fatalError("parseLine:L");
+            strcpy(login_file_path,buffer+2);
+            break;
+        case 'R':
+            if(buffer[1] != ':') fatalError("parseLine:R");
+            strcpy(register_file_path,buffer+2);
+            break;
+        case 'S':
+            if(buffer[1] != ':') fatalError("parseLine:S");
+            strcpy(sendmsg_file_path,buffer+2);
+            break;
+        case 'M':
+            if(buffer[1] != ':') fatalError("parseLine:M");
+            logined_users_max = atoi(buffer+2);
+            break;
+        default:
+            fatalError("parseLine");
+            break;
     }
-    printf("Read over\n");    
-    sprintf(mypipename,"%s%s",CLIENT_PREFIX,user.username);
-    if (open_fifo(mypipename,O_WRONLY | O_NONBLOCK,&fd) == 0) {
-        printf("Login Failure\n");
-        return ;
-    }
+}
+
+/*******************************************************************/
+void fatalError(char *prompt) {
+    perror(prompt);
+    exit(-1);
+}
+
+
+/******************************************************************/
+/* init */
+void init() {
+    int res;
+    /* init the userlist */
+    res = userlist_init(&userlist,logined_users_max);
+    if (res != SUCCESS) fatalError("userlist_init");
+
+    /* init the userfile */
+    res = userfile_init(&userfile,USERFILE_PATH);
+    if (res != USERFILE_SUCCESS) fatalError("userfile_init");
     
-    //check passwd
-    user_id = find_user(&user);
-//    printf("User:%s\nPasswd:%s\n",user.username,user.passwd);
-//    printf("UserId%d\nUsername:%s\nPasswd:%s\n",user_id,user.username,user.passwd);
-//    printf("Check Passwd:%d\n",check_passwd(&user,user_id));
-    if (user_id < 0) {
-        printf("Can not find %s\n",user.username);
-        sprintf(msg.message,"Can not find %s\nMaybe Server is wrong!!\n",user.username);
-    } else if (check_passwd(&user,user_id) == 0) {
-        sprintf(msg.message,"Password is wrong!");
-    } else {
-        login_users[user_id] = 1;
-    }
+    /* init three fifo */
+    init_fifo();
 
-    strcpy(msg.to,user.username);
-    write(fd,&msg,sizeof(CHATMSG) );
-    close(fd);
-    return ;
+    /* init three thread */
+    init_thread();
 }
 
-int find_user(USER *user_ptr) {
-    int i = 0;
-    while(i < user_end) {
-        if (strcmp(user_ptr->username,users[i].username) == 0) return i;
-        i++;
-    }
-    return -1;
+/*****************************************************************/
+/* init the fifo fd */
+void init_fifo() {
+    int res;
+    reg_fifo_fd = open(register_file_path, O_RDONLY);
+    if (reg_fifo_fd == -1) fatalError("init_fifo:reg_fifo");
+
+    login_fifo_fd = open(login_file_path, O_RDONLY);
+    if (login_fifo_fd == -1) fatalError("init_fifo:login_fifo");
+
+    sendmsg_fifo_fd = open(sendmsg_file_path, O_RDONLY);
+    if (sendmsg_fifo_fd == -1) fatalError("init_fifo:sendmsg_fifo_fd");
 }
 
-int check_passwd(USER *user_ptr,int user_id) {
-    return strcmp(user_ptr->passwd,users[user_id].passwd) == 0;
+/****************************************************************/
+/*init thread */
+
+void init_thread() {
+   int res;
+    /* create register thread */
+   res = pthread_create(&register_tid,NULL,register_thread_func,NULL);
+   if (res == -1) fatalError("init_thread:register");
+
+   /* create login thread */
+   res = pthread_create(&login_tid,NULL,login_thread_func,NULL);
+   if (res == -1) fatalError("init_thread:login");
+
+   res = pthread_create(&sendmsg_tid,NULL,sendmsg_thread_func,NULL);
+   if (res == -1) fatalError("init_thread:sendmsg");
+
 }
 
-void chat_client() {
-    printf("Chat client\n");
-    int res,fd,isFailure = 0;
-    CHATMSG msg;
-    char fifoname[100];
-    while(1) {
-        res = read(chat_fifo_fd,&msg,sizeof(CHATMSG) );
-        if (res > 0) break;
-    }
-    sprintf(fifoname,"%s%s",CLIENT_PREFIX,msg.to);
-    if (open_fifo(fifoname,O_WRONLY | O_NONBLOCK, &fd) == 0) {
-        printf("Chat Failure\n");
-        isFailure = 1;
-    }
-    if (isFailure == 0) {
-        write(fd,&msg,sizeof(CHATMSG));
-        close(fd);
-    }
-
-    sprintf(fifoname,"%s%s",CLIENT_PREFIX,msg.from);
-    if (open_fifo(fifoname,O_WRONLY | O_NONBLOCK, &fd) == 0) {
-        printf("Chat Failure\n");
-        return ;
-    }
-
-    if (isFailure) sprintf(msg.message,"Send Message Failure\n");
-    else sprintf(msg.message,"Send Message Successfully\n");
-    strcpy(msg.to,msg.from);
-    strcpy(msg.from,"Server");
-    write(fd,&msg,sizeof(CHATMSG) );
-    close(fd);
+/******************************************************************/
+void listen_loop() {
+   pthread_join(register_tid,NULL);
+   pthread_join(login_tid,NULL);
+   pthread_join(sendmsg_tid,NULL);
 }
 
+/******************************************************************/
+/* register thread function */
 
+void *register_thread_func(void *arg) {
+    printf("register_thread_func\n");
+}
+
+/******************************************************************/
+/* login_thread_function */
+
+void *login_thread_func(void *arg) {
+    printf("login_thread\n");
+
+}
+
+/*****************************************************************/
+/* sendmsg_thread_func */
+
+void *sendmsg_thread_func(void *arg) {
+    printf("register_thread\n");
+}
