@@ -18,19 +18,16 @@
 /* login user information */
 user_t *login_user;
 
-
 int reg_fifo_fd, login_fifo_fd, sendmsg_fifo_fd;
 int clien_fifo_fd;
 
-/* fifo name */
-char register_path[BUFF_SZ];
-char login_path[BUFF_SZ];
-char sendmsg_fifo_fd[BUFF_SZ];
-
-
-
+config_t *config;
 
 /****************************************************************************/
 /* function declaration */
-int main(int argc,char **argv);                 /* the main function */
-
+int main(int argc,char **argv);         /* the main function */
+int init();                             /* init the client */
+void fatalError();                      /* fatal error */
+void listen_loop();                     /*listen loop, wait user input*/
+void register_user();                   /* register */
+void login();                           

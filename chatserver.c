@@ -26,10 +26,8 @@ userfile_t userfile; /* user list */
 userlist_t userlist; /* logined user list */
 int logined_users_max = 1000;
 
-/* fifo path */
-char register_file_path[BUFF_SZ];
-char login_file_path[BUFF_SZ];
-char sendmsg_file_path[BUFF_SZ];
+/* server config */
+config_t *config;
 
 /* fifo fd */
 int reg_fifo_fd, login_fifo_fd, sendmsg_fifo_fd;
@@ -105,13 +103,15 @@ void become_daemon() {
 
 void configuration() {
     int res;
-    res = config_parse(CONFIGURATIONFILE_PATH,
-            register_file_path,login_file_path,sendmsg_file_path,
-            &logined_users_max,BUFF_SZ);
-    printf("register_file_path is %s\n",register_file_path);
-    printf("login_file_path is %s\n",login_file_path);
-    printf("sendmsg_file_path is %s\n",sendmsg_file_path);
-    printf("logined_users_max is %d\n",logined_users_max);
+    config  = (config_t *)malloc(sizeof(config_t));
+    if (config == NULL) fatalError("malloc config failure");
+
+    res = config_parse(CONFIGURATIONFILE_PATH,config);
+
+    printf("register_file_path is %s\n",config->reg_path);
+    printf("login_file_path is %s\n",config->login_path);
+    printf("sendmsg_file_path is %s\n",config->sendmsg_path);
+    printf("logined_users_max is %d\n",config->max_user);
     if (res != 0) {
         fprintf(stderr,"config_parse error\n");
         exit(-1);
@@ -141,12 +141,7 @@ void init() {
     /* init three fifo */
     init_fifo();
 
-    /* handle some signals */
-    signal(SIGKILL, cleaner);
-    signal(SIGINT, cleaner);
-    signal(SIGTERM, cleaner);
-
-
+    
     /* init three thread */
     init_thread();
 }
@@ -156,24 +151,30 @@ void init() {
 void init_fifo() {
     int res;
     //create fifo
-    res = mkfifo(register_file_path,0777);
+    res = mkfifo(config->reg_path,0777);
     if (res != 0) fatalError("init_fifo:create reg_fifo");
 
-    res = mkfifo(login_file_path,0777);
+    res = mkfifo(config->login_path,0777);
     if (res != 0) fatalError("init_fifo:create login_file");
 
-    res = mkfifo(sendmsg_file_path,0777);
+    res = mkfifo(config->sendmsg_path,0777);
     if (res != 0) fatalError("init_fifo:create sendmsg_file");
 
 
+    /* handle some signals */
+    signal(SIGKILL, cleaner);
+    signal(SIGINT, cleaner);
+    signal(SIGTERM, cleaner);
+
+
     //open fifo
-    reg_fifo_fd = open(register_file_path, O_RDONLY);
+    reg_fifo_fd = open(config->reg_path, O_RDONLY);
     if (reg_fifo_fd == -1) fatalError("init_fifo:reg_fifo");
 
-    login_fifo_fd = open(login_file_path, O_RDONLY);
+    login_fifo_fd = open(config->login_path, O_RDONLY);
     if (login_fifo_fd == -1) fatalError("init_fifo:login_fifo");
 
-    sendmsg_fifo_fd = open(sendmsg_file_path, O_RDONLY);
+    sendmsg_fifo_fd = open(config->sendmsg_path, O_RDONLY);
     if (sendmsg_fifo_fd == -1) fatalError("init_fifo:sendmsg_fifo_fd");
 }
 
@@ -229,8 +230,7 @@ void *sendmsg_thread_func(void *arg) {
 /******************************************************************/
 /* remove the fifo if server down */
 void cleaner() {
-    unlink(register_file_path);
-    unlink(login_file_path);
-    unlink(sendmsg_file_path);
-    exit(-1);
+    unlink(config->reg_path);
+    unlink(config->login_path);
+    unlink(config->sendmsg_path);
 }

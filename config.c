@@ -9,24 +9,33 @@
 
 /* just for pass1, so line length can longer than BUFF_SZ */
 #define BUFF_SZ 100
-#define MAX_LINES 4
 /************************************************************************/
 /* some function declaration */
 
-void pass1(int fd,int *lineStart); /* get pre line offset */
-int pass2(int fd,int *lineStart,
-        char *reg_path,char *login_path,char *sendmsg_path,int *max_user,
-        int line_max_len); /* parse config */
+/* get pre line offset */
+void pass1(int fd,int *lineStart); 
+/* process buffer for parse line offset*/
+void processLine(char *buffer,int charRead,int *lineStart);
+/* parse config */
+int pass2(int fd,int *lineStart,config_t *config); 
+/* parse line */
+int parseLine(char *buffer,int charRead,config_t *config);
 
+/***********************************************************************/
+/* local value */
+static int fileOffset;
+static int lineCount;
 
 /**************************************************************************/
 /* read config file and parse */
 
-int config_parse(char *config_path, char *reg_path,
-        char *login_path, char *sendmsg_path, int *max_user,int line_max_len) {
+int config_parse(char *config_path, config_t *config) {
+    
+    //check the pointer is not NULL
+    if (config == NULL || config_path == NULL) return CONFIG_FAILURE;
     
     int res,fd;
-    int lineStart[MAX_LINES + 1]; /* the config file we only read the first four line */
+    int lineStart[CONFIG_SIZE + 1]; /* the config file we only read the first four line */
     lineStart[0] = 0;
 
     /* read the configuration file */
@@ -35,7 +44,7 @@ int config_parse(char *config_path, char *reg_path,
     }
 
     pass1(fd,lineStart);
-    res = pass2(fd,lineStart,reg_path,login_path,sendmsg_path,max_user,line_max_len);
+    res = pass2(fd,lineStart,config);
 
     return res;
 }
@@ -44,11 +53,12 @@ int config_parse(char *config_path, char *reg_path,
 
 /***************************************************************************/
 /* first parse, get pre line offset */
+
 void pass1(int fd,int *lineStart) {
     int charRead,i;
     char buffer[BUFF_SZ];
-    int fileOffset = 0;
-    int lineCount = 1;
+    fileOffset = 0;
+    lineCount = 1;
     
     while(1) {
         charRead = read(fd,buffer,BUFF_SZ);
@@ -58,69 +68,82 @@ void pass1(int fd,int *lineStart) {
         }
         
         //process
-        for(i = 0;i < charRead;i++) {
-            fileOffset++;
-            if (buffer[i] == '\n') 
-                lineStart[lineCount++] = fileOffset;
-        }
-
-        if (lineCount == MAX_LINES + 1) break;
+        processLine(buffer,charRead,lineStart);
+        if (lineCount == CONFIG_SIZE + 1) break;
     }
-    while(lineCount <= MAX_LINES)
-        lineStart[lineCount++] = fileOffset;
+    lineStart[lineCount++] = fileOffset;
 }
+
+
+/***************************************************************************/
+/* process buffer for parse line offset */
+
+void processLine(char *buffer,int charRead,int *lineStart) {
+    int i;
+    for(i = 0;i < charRead;i++) {
+        fileOffset++;
+        if (buffer[i] == '\n') 
+            lineStart[lineCount++] = fileOffset;
+    }
+}
+
+
 
 /****************************************************************************/
 /* second parse, use lineStar to parse preline */
 
-int pass2(int fd,int *lineStart,
-        char *reg_path,char *login_path,char *sendmsg_path,int *max_user,
-        int line_max_len) {
+int pass2(int fd,int *lineStart,config_t *config) {
 
-    int i, charRead;
-    char *buffer = (char*)malloc(sizeof(char)*(line_max_len + 2));
+    int i, charRead,res;
+    char *buffer = (char*)malloc(sizeof(char)*(CONFIG_BUFFER_SZ + 2));
     int read_len;
     if (buffer == NULL) return -1; /*malloc faliure*/
 
-    for(i = 0;i < MAX_LINES;i++) {
+    for(i = 0;i <= CONFIG_SIZE;i++) {
         //read
         read_len = lineStart[i+1] - lineStart[i];
-        if (read_len == 0) continue;
+        if (read_len == 0) break; //ending
         
-        if (read_len - 2 > line_max_len) return -1;
-
+        if (read_len - 2 > CONFIG_BUFFER_SZ) return -1;
+        
         lseek(fd,lineStart[i],SEEK_SET);
         charRead = read(fd,buffer,read_len);
-        //fix some error
+        
         if (charRead < 0) return -1; //parse error
         if (charRead != read_len) return -1;
-        if (charRead < 2) return -1;
-        if (buffer[1] != ':') return -1;
-        
         
 
-        if (buffer[charRead-1] == '\n')
-            buffer[charRead-1] = '\0'; //replace '\n' to '\0'
-//        printf("%s",buffer+2);
-        switch(buffer[0]) {
-            case 'L':
-                strcpy(login_path,buffer+2);
-                break;
-            case 'R':
-                strcpy(reg_path,buffer+2);
-                break;
-            case 'S':
-                strcpy(sendmsg_path,buffer+2);
-                break;
-            case 'M':
-                if(max_user != NULL) *max_user = atoi(buffer+2);
-                break;
-            default:
-                return -1;
-        }
+        res = parseLine(buffer,charRead,config);
+        if (res != 0) return res;
     }
-
     free(buffer);
     return 0; /*parse success */
 
+}
+
+/*******************************************************************************/
+/* parse line */
+int parseLine(char *buffer,int charRead,config_t *config) {
+    if (charRead < 2) return -1;
+    if (buffer[1] != ':') return -1;
+
+    if (buffer[charRead-1] == '\n')
+        buffer[charRead-1] = '\0'; //replace '\n' to '\0'
+    switch(buffer[0]) {
+        case 'L':
+            strcpy(config->login_path,buffer+2);
+            break;
+        case 'R':
+            strcpy(config->reg_path,buffer+2);
+            break;
+        case 'S':
+            strcpy(config->sendmsg_path,buffer+2);
+            break;
+        case 'M':
+            config->max_user = atoi(buffer+2);
+            break;
+        default:
+            return -1;
+    }
+    return 0;
 }
