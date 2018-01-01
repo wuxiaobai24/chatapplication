@@ -9,6 +9,7 @@
 #include "userlist.h"
 #include "userfile.h"
 #include "config.h"
+#include "message.h"
 
 #define BUFF_SZ 100
 #define CONFIGURATIONFILE_PATH "/home/wukunhan2015170297/.chatapplication"
@@ -29,8 +30,11 @@ int logined_users_max = 1000;
 /* server config */
 config_t *config;
 
-/* fifo fd */
-int reg_fifo_fd, login_fifo_fd, sendmsg_fifo_fd;
+/* messager */
+messenger_t *reg_reciver;
+messenger_t *login_reciver;
+messenger_t *msg_reciver; /* chat message reciver */
+
 
 /* thread tid */
 pthread_t register_tid, login_tid, sendmsg_tid;
@@ -48,7 +52,7 @@ void init_thread();                 /* init three listen thread */
 void listen_loop();                 /* start to listen loop */
 void fatalError(char *prompt);      /* a fatal error which server should exit */
 void init();                        /* init the chat server */
-void init_fifo();                   /* init the fifo fd */
+void init_recivers();              /* init messenger */
 void *login_thread_func(void *);    /* login thread function */
 void *register_thread_func(void *); /* register thread function */
 void *sendmsg_thread_func(void *);   /* sendmsg thread function */
@@ -138,8 +142,8 @@ void init() {
     res = userfile_init(&userfile,USERFILE_PATH);
     if (res != USERFILE_SUCCESS) fatalError("userfile_init");
     
-    /* init three fifo */
-    init_fifo();
+    /* init three messenger */
+    init_recivers();
 
     
     /* init three thread */
@@ -147,11 +151,11 @@ void init() {
 }
 
 /*****************************************************************/
-/* init the fifo fd */
-void init_fifo() {
+/* init reciver */
+void init_recivers() {
     int res;
     //create fifo
-    res = mkfifo(config->reg_path,0777);
+    res =  mkfifo(config->reg_path,0777);
     if (res != 0) fatalError("init_fifo:create reg_fifo");
 
     res = mkfifo(config->login_path,0777);
@@ -167,17 +171,24 @@ void init_fifo() {
     signal(SIGTERM, cleaner);
 
 
-    //open fifo
-    reg_fifo_fd = open(config->reg_path, O_RDONLY);
-    if (reg_fifo_fd == -1) fatalError("init_fifo:reg_fifo");
+    //malloc messenger 
+    reg_reciver = (messenger_t *)malloc(sizeof(messenger_t));
+    if (reg_reciver == NULL) fatalError("init_reciver:malloc reg_reciver");
 
-    login_fifo_fd = open(config->login_path, O_RDONLY);
-    if (login_fifo_fd == -1) fatalError("init_fifo:login_fifo");
+    login_reciver = (messenger_t *)malloc(sizeof(messenger_t));
+    if (login_reciver == NULL) fatalError("init_reciver:malloc login_reciver");
 
-    sendmsg_fifo_fd = open(config->sendmsg_path, O_RDONLY);
-    if (sendmsg_fifo_fd == -1) fatalError("init_fifo:sendmsg_fifo_fd");
+    msg_reciver = (messenger_t *)malloc(sizeof(messenger_t));
+    if (msg_reciver == NULL) fatalError("init_reciver:malloc msg_reciver");
+
+    //init messenger
+    if (messenger_init(reg_reciver,config->reg_path,Reciver) != 0)
+        fatalError("init_reciver:messenger_init reg_reciver");
+    if (messenger_init(login_reciver,config->login_path,Reciver) != 0)
+        fatalError("init_reciver:messenger_init login_reciver");
+    if (messenger_init(msg_reciver,config->sendmsg_path,Reciver) != 0)
+        fatalError("init_reciver:messenger_init msg_reciver");
 }
-
 /****************************************************************/
 /*init thread */
 
