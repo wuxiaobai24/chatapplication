@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include "userlist.h"
 #include "userfile.h"
-
+#include "config.h"
 
 #define BUFF_SZ 100
 #define CONFIGURATIONFILE_PATH "/home/wukunhan2015170297/.chatapplication"
@@ -45,9 +45,6 @@ void *register_func(void *arg);     /* the function for register */
 void *login_func(void *arg);        /* the function for login */
 void *chat_func(void *arg);         /* the function for chat */
 void configuration();               /* read the configuration file and some value */
-void pass1(int fd,int *lineStart);  /* get the pre line offset */
-void pass2(int fd,int *lineStart);  /* parse the configuration pre line */
-void parseLine(char *buffer,int readCount);
 void become_daemon();               /* let the server become a daemon process */
 void init_thread();                 /* init three listen thread */
 void listen_loop();                 /* start to listen loop */
@@ -57,7 +54,7 @@ void init_fifo();                   /* init the fifo fd */
 void *login_thread_func(void *);    /* login thread function */
 void *register_thread_func(void *); /* register thread function */
 void *sendmsg_thread_func(void *);   /* sendmsg thread function */
-
+void cleaner();                     /* remove the fifo if signaled */
 
 /***********************************************************************/
 /* main function */
@@ -107,84 +104,20 @@ void become_daemon() {
 /* read configuration file and parse configuration */
 
 void configuration() {
-    int res,fd;
-    int lineStart[5]; /* the configuration file have only 4 line. */
-    lineStart[0] = 0; 
-
-    /* read the configuration file */
-    /* the work dir is root now, so we should use the absolute path*/
-    if ((fd = open(CONFIGURATIONFILE_PATH,O_RDONLY)) == -1)
-            fatalError("configuration:open\n");
-    /* parse configuration */
-    /* the file pathname should less than 100 character */
-    pass1(fd,lineStart);  //get pre line offset
-    pass2(fd,lineStart); // parse the configuration
-
-    if (res == -1) fatalError("configuration:read\n");
-}
-
-/*********************************************************************/
-/* get pre line offset in fd*/
-
-void pass1(int fd,int *lineStart) {
-    int charRead,i;
-    char buffer[BUFF_SZ];
-    int fileOffset = 0;
-    int lineCount = 1;
-    while(TRUE) {
-        charRead = read(fd,buffer,BUFF_SZ);
-        if (charRead == 0) break;
-        if (charRead == 1) fatalError("pass1");
-
-        for(i = 0;i < charRead;i++) {
-            fileOffset++;
-            if (buffer[i] == '\n') lineStart[lineCount++] = fileOffset;
-        }
-        if (lineCount == 4) break; /* we just read the first four line */
-    }
-    if (lineCount != 4) lineStart[lineCount] = fileOffset;
-}
-
-/*******************************************************************/
-/* prase the configuration pre line */
-
-void pass2(int fd,int *lineStart) {
-    int i, charRead;
-    char buffer[BUFF_SZ]; // so pre line can not be longer than BUFF_SZ
-    for(i = 0;i < 4;i++) {
-        lseek(fd,lineStart[i],SEEK_SET);
-        charRead = read(fd, buffer, lineStart[i+1] - lineStart[i]);
-        buffer[charRead] = '\0';    //convenient to strcpy 
-        parseLine(buffer,charRead);
+    int res;
+    res = config_parse(CONFIGURATIONFILE_PATH,
+            register_file_path,login_file_path,sendmsg_file_path,
+            &logined_users_max,BUFF_SZ);
+    printf("register_file_path is %s\n",register_file_path);
+    printf("login_file_path is %s\n",login_file_path);
+    printf("sendmsg_file_path is %s\n",sendmsg_file_path);
+    printf("logined_users_max is %d\n",logined_users_max);
+    if (res != 0) {
+        fprintf(stderr,"config_parse error\n");
+        exit(-1);
     }
 }
 
-/***************************************************************/
-
-void parseLine(char *buffer,int charRead) {
-    if(charRead < 2) return;
-    switch(buffer[0]) {
-        case 'L':
-            if(buffer[1] != ':') fatalError("parseLine:L");
-            strcpy(login_file_path,buffer+2);
-            break;
-        case 'R':
-            if(buffer[1] != ':') fatalError("parseLine:R");
-            strcpy(register_file_path,buffer+2);
-            break;
-        case 'S':
-            if(buffer[1] != ':') fatalError("parseLine:S");
-            strcpy(sendmsg_file_path,buffer+2);
-            break;
-        case 'M':
-            if(buffer[1] != ':') fatalError("parseLine:M");
-            logined_users_max = atoi(buffer+2);
-            break;
-        default:
-            fatalError("parseLine");
-            break;
-    }
-}
 
 /*******************************************************************/
 void fatalError(char *prompt) {
@@ -208,6 +141,12 @@ void init() {
     /* init three fifo */
     init_fifo();
 
+    /* handle some signals */
+    signal(SIGKILL, cleaner);
+    signal(SIGINT, cleaner);
+    signal(SIGTERM, cleaner);
+
+
     /* init three thread */
     init_thread();
 }
@@ -216,6 +155,18 @@ void init() {
 /* init the fifo fd */
 void init_fifo() {
     int res;
+    //create fifo
+    res = mkfifo(register_file_path,0777);
+    if (res != 0) fatalError("init_fifo:create reg_fifo");
+
+    res = mkfifo(login_file_path,0777);
+    if (res != 0) fatalError("init_fifo:create login_file");
+
+    res = mkfifo(sendmsg_file_path,0777);
+    if (res != 0) fatalError("init_fifo:create sendmsg_file");
+
+
+    //open fifo
     reg_fifo_fd = open(register_file_path, O_RDONLY);
     if (reg_fifo_fd == -1) fatalError("init_fifo:reg_fifo");
 
@@ -271,4 +222,15 @@ void *login_thread_func(void *arg) {
 
 void *sendmsg_thread_func(void *arg) {
     printf("register_thread\n");
+}
+
+
+
+/******************************************************************/
+/* remove the fifo if server down */
+void cleaner() {
+    unlink(register_file_path);
+    unlink(login_file_path);
+    unlink(sendmsg_file_path);
+    exit(-1);
 }

@@ -14,16 +14,10 @@
  * Return: if init userfile success,return 0,else return -1 */
 
 int userfile_init(userfile_t *userfile,char *path) {
-    int res;
-    struct stat buf;
-    if (res == -1) {
-        if( creat(path, O_RDWR) == -1) {
-            perror("userfile_init:create:");
-            exit(-1);
-        }
-    }
-    userfile->fd = open(path,O_CREAT | O_RDWR);
-    if (userfile->fd) return USERFILE_ERROR;
+
+    userfile->fd = open(path,O_CREAT | O_RDWR, 0600);
+    if (userfile->fd == -1) return USERFILE_ERROR;
+    
     if(pthread_mutex_init(&userfile->mutex,NULL)) return USERFILE_ERROR;
     return USERFILE_SUCCESS;
 }
@@ -53,14 +47,14 @@ int userfile_search_user(userfile_t *userfile, user_t *user) {
 
     //search
     while(read(userfile->fd,(void *)&buf,sizeof(user_t)) ) {
-        if (strcmp(user->username,buf->username) == 0) {
+       if (strcmp(user->username,buf.username) == 0) {
             pthread_mutex_unlock(&userfile->mutex);
-            strcpy(user->passwd,buf->passwd);
+            strcpy(user->passwd,buf.passwd);
             return USERFILE_SUCCESS;
         }
     }
 
     pthread_mutex_unlock(&userfile->mutex);
-    return USERFILE_NO_FOUND;
+    return USERFILE_NO_USER;
 }
 

@@ -1,10 +1,13 @@
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "userlist.h"
-#include "string.h"
+#include "user.h"
 
 /*********************************************************************************/
 
-void fatalError(char *prompt) {
-    sprintf("FatalError: %s\n",prompt);
+static void fatalError(char *prompt) {
+    fprintf(stderr,"FatalError: %s\n",prompt);
     exit(/* EXITFAILURE*/1);
 }
 
@@ -23,7 +26,7 @@ int userlist_init(userlist_t *userlist,int max_users) {
     userlist->user_len = 0; /* set the user_len */
 
     /* init mutex */
-    res = pthread_mutex_init(&userlist->mutex);
+    res = pthread_mutex_init(&userlist->mutex,NULL);
     if (res != 0) return res;
 
     return SUCCESS;
@@ -69,14 +72,14 @@ int userlist_set(userlist_t *userlist,user_t *user,int index) {
     if (userlist == NULL || user == NULL) return POINTER_NULL;
     if (index > userlist->max_users) return INDEX_ERROR;
     
-    condition_lock(&userlist->cond);
+    pthread_mutex_lock(&userlist->mutex);
     //memcopy(&(userlist->users[index]),user,sizeof(user_t));
     if (index > userlist->user_len) {
-        condition_unlock(&userlist->cond);
+        pthread_mutex_unlock(&userlist->mutex);
         return INDEX_ERROR;
     }
     userlist->users[index] = *user;
-    condition_unlock(&userlist->cond);
+    pthread_mutex_unlock(&userlist->mutex);
 
     return SUCCESS;
 }
@@ -109,7 +112,7 @@ int userlist_search(userlist_t *userlist,user_t *user) {
     pthread_mutex_lock(&userlist->mutex);
     for(i = 0;i < userlist->user_len;i++) {
         /* ths name is unique iddentification */
-        if (strcmp(userlist->users[i].name,user->name) == 0)
+        if (strcmp(userlist->users[i].username,user->username) == 0)
             break;
     }
     if (i == userlist->user_len) i = NOT_FOUND;
@@ -130,7 +133,7 @@ int userlist_remove(userlist_t *userlist,int index) {
 
     userlist->user_len--;
     for(i = index;i < userlist->user_len;i++)
-        userlist->user[i] = userlist->user[i+1];
+        userlist->users[i] = userlist->users[i+1];
 
     pthread_mutex_unlock(&userlist->mutex);
     return SUCCESS;

@@ -1,4 +1,0 @@
-REG_FIFO:~/chatapplication/data/server_fifo/wukunhan2015170297register
-LOGIN_FIFO:~/chatapplication/data/server_fifo/wukunhan2015170297login
-CHAT_FIFO:~/chatapplication/data/server_fifo/wukunhan2015170297sendmsg
-USER_FIFE:~/chatappication/data/.userfile
