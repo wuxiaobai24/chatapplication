@@ -1,7 +1,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <unistd.h>
+#include <string.h>
 #include "message.h"
 
 /* messenger version */
@@ -9,6 +11,8 @@
 
 /***************************************************************************/
 /* some local function declaration */
+
+char *get_reply_message(int type);
 
 /* fifo version */
 int reciver_init_fifo(messenger_t *messenger, char *path);
@@ -31,7 +35,7 @@ int messenger_init(messenger_t *messenger, char *path, int type) {
 
 /**********************************************************************/
 /* destory_messenger */
-int destory_messenger(messenger_t *messenger) {
+int messenger_destory(messenger_t *messenger) {
     /* check parameter */
     if (messenger == NULL) return NULL_POINTER;
     
@@ -48,8 +52,8 @@ int destory_messenger(messenger_t *messenger) {
 int messenger_send(messenger_t *messenger,void *message,size_t message_size) {
     /* check parameter */
     if (messenger == NULL || message == NULL) return NULL_POINTER;
-    if (messenger->type != Reciver) return ERROR_TYPE;
-
+    if (messenger->type != Sender) return ERROR_TYPE;
+    printf("Send message\n");
     return messenger_send_fifo(messenger,message,message_size);
 }
 
@@ -59,8 +63,8 @@ int messenger_recive(messenger_t *messenger, void *messagebuf, size_t message_si
     /* check parameter */
     if (messenger == NULL || messagebuf == NULL) return NULL_POINTER;
     if (messenger->type != Reciver) return ERROR_TYPE;
-
-    return messenger_recive(messenger,messagebuf,message_size);
+    printf("Recive message\n");
+    return messenger_recive_fifo(messenger,messagebuf,message_size);
 }
 
 
@@ -84,6 +88,7 @@ int reciver_init_fifo(messenger_t *messenger, char *path) {
 //    if (res != 0) return FATAL_ERROR;
 
     /* open fifo */
+    printf("Open read fifo:%s\n",path);
     res = open(path, O_RDONLY);
     if (res == -1) return FATAL_ERROR;
 
@@ -97,6 +102,7 @@ int sender_init_fifo(messenger_t *messenger, char *path) {
     /* open fifo */
     int res;
     
+    printf("Open write fifo:%s\n",path);
     res = open(path,O_WRONLY);
     if (res == -1) return FATAL_ERROR;
 
@@ -126,5 +132,76 @@ int messenger_send_fifo(messenger_t *messenger,void *message,size_t message_size
 /* recive message -- fifo version */
 int messenger_recive_fifo(messenger_t *messenger, void *messagebuf,size_t message_size) {
     return read(messenger->id,messagebuf,message_size);
+}
+
+
+
+/*******************************************************************/
+/* init the server reply */
+int init_reply(chat_message_t *reply_buf, int type) {
+    if (reply_buf == NULL) return NULL_POINTER;
+    if (type > ParseError) return ERROR_TYPE;
+    
+    strcpy(reply_buf->sender,SERVER_NAME);
+    strcpy(reply_buf->message,get_reply_message(type));
+    return 0;
+
+}
+
+/*******************************************************************/
+/* get the reply message by reply_type */
+char *get_reply_message(int reply_type) {
+    switch(reply_type) {
+        case SuccessReply:
+            return "Success";
+            //break;  //in fact, we don't nead break
+        case WrongUserName:
+            return "WrongUserName";
+        case ServerError:
+            return "ServerError";
+        case NoUser:
+            return "NoUser";
+        case WrongPasswd:
+            return "WrongPasswd";
+        default: //ParseError
+            return "ParseError";
+    }
+}
+
+/*******************************************************************/
+/* parse the server reply */
+int parse_server_reply(chat_message_t *reply_buf) {
+
+
+    int i;
+    for(i = 0;i < ParseError;i++) {
+        if (strcmp(reply_buf->message,get_reply_message(i)) == 0)
+            return i;
+    }
+    return ParseError;
+}
+
+/********************************************************************/
+/* username to path */
+
+int username2path(char *username,char *path,int type) {
+    if (username == NULL) return NULL_POINTER;
+        
+    printf("username2path:username = %s\n",username);
+
+    switch (type) {
+        case Client:
+            sprintf(path,"%s%sc",CLIENT_FILE_PREFIX,username);
+            break;
+        case Temp:
+            sprintf(path,"%s%st",CLIENT_FILE_PREFIX,username);
+            break;
+        case Server:
+            sprintf(path,"%s%ss",SERVER_FILE_PREFIX,username);
+            break;
+        default:
+            return ERROR_TYPE;
+    }
+    return 0;
 }
 

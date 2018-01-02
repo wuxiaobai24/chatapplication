@@ -38,6 +38,8 @@ int config_parse(char *config_path, config_t *config) {
     int lineStart[CONFIG_SIZE + 1]; /* the config file we only read the first four line */
     lineStart[0] = 0;
 
+    printf("config_path:%s\n",config_path);
+    
     /* read the configuration file */
     if ((fd = open(config_path,O_RDONLY)) == -1) {
         return -1;/* Failure */

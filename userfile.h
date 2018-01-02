@@ -21,6 +21,6 @@ int userfile_init(userfile_t *userfile, char *path);
 int userfile_add_user(userfile_t *userfile, user_t *user);
 
 /* search a user in userfile by username */
-int userfile_search(userfile_t *userfile, user_t *user);
+int userfile_search_user(userfile_t *userfile, user_t *user);
 
 #endif

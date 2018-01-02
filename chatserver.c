@@ -196,18 +196,20 @@ void init_thread() {
    int res;
     /* create register thread */
    res = pthread_create(&register_tid,NULL,register_thread_func,NULL);
-   if (res == -1) fatalError("init_thread:register");
+   if (res == -1) fatalError("init_thread:register failure");
 
    /* create login thread */
    res = pthread_create(&login_tid,NULL,login_thread_func,NULL);
-   if (res == -1) fatalError("init_thread:login");
+   if (res == -1) fatalError("init_thread:login failure");
 
    res = pthread_create(&sendmsg_tid,NULL,sendmsg_thread_func,NULL);
-   if (res == -1) fatalError("init_thread:sendmsg");
+   if (res == -1) fatalError("init_thread:sendmsg failure");
+   
 
 }
 
 /******************************************************************/
+
 void listen_loop() {
    pthread_join(register_tid,NULL);
    pthread_join(login_tid,NULL);
@@ -219,6 +221,57 @@ void listen_loop() {
 
 void *register_thread_func(void *arg) {
     printf("register_thread_func\n");
+    int res;
+    register_message_t reg_msgbuf;
+    chat_message_t reply_msgbuf;
+    messenger_t reply_sender;
+    user_t userbuf;
+    char sender_path[BUFF_SZ];
+
+    while(1) {
+        // recive register message
+        printf("Start wait register message\n");
+        res = messenger_recive(reg_reciver,&reg_msgbuf,sizeof(register_message_t));
+        if (res < 0) {
+            printf("res = %d\n",res);
+            perror("register_thread_func:recive failure");
+            continue;
+        }
+        printf("Recive a register message\n");
+        strcpy(userbuf.username,reg_msgbuf.username);
+
+        //process register message
+        res = userfile_search_user(&userfile, &userbuf);
+        if (res == USERFILE_ERROR) {
+            perror("register_thread_func:userfile error");
+            continue;
+        }
+        
+        //init reply_sender
+        username2path(reg_msgbuf.temp_reciver,sender_path,Temp);
+        messenger_init(&reply_sender,sender_path,Sender);
+
+        // init reply msg
+        strcmp(userbuf.username,reg_msgbuf.username);
+        if (res == USERFILE_NO_USER) {
+            //already have user
+            printf("a new user\n");
+            init_reply(&reply_msgbuf,SuccessReply);
+            strcpy(userbuf.passwd,reg_msgbuf.passwd);
+            userfile_add_user(&userfile,&userbuf);
+        } else {
+            printf("register failure\n");
+            init_reply(&reply_msgbuf,WrongUserName);
+        }
+        strcpy(reply_msgbuf.reciver,reg_msgbuf.username);
+
+        //reply
+        res = messenger_send(&reply_sender,(void*)&reply_msgbuf,sizeof(chat_message_t));
+        printf("reply send res = %d\n",res);
+        //destory reply_sender
+        messenger_destory(&reply_sender);
+    }
+
 }
 
 /******************************************************************/
@@ -227,13 +280,72 @@ void *register_thread_func(void *arg) {
 void *login_thread_func(void *arg) {
     printf("login_thread\n");
 
+    int res;
+    login_message_t login_msgbuf;
+    chat_message_t reply_msgbuf;
+    messenger_t reply_sender;
+    user_t userbuf;
+    char sender_path[BUFF_SZ];
+
+    while(1) {
+        printf("Start wait login message\n");
+        res = messenger_recive(login_reciver, &login_msgbuf, sizeof(login_message_t));
+        if (res < 0) {
+            printf("res = %d\n",res);
+            perror("login_thread_func:recive failure");
+            continue;
+        }
+        printf("Recive a login message\n");
+
+        strcpy(userbuf.username, login_msgbuf);
+
+        //process login message 
+        res = userfile_search_user(&userfile, &userbuf);
+        if (res == USERFILE_ERROR) {
+            printf("login_thread_func:userfile error\n");
+            continue;
+        }
+
+        //init reply sender
+        usernaem2path(reg_msgbuf.temp_reciver, sender_path, Temp);
+        messenger_init(&reply_sender, sender_path,Sender);
+
+        //init reply msg
+        if (res == USERFILE_NO_USER) {
+            // no user
+            printf("No User, Login Filure\n");
+            init_reply(&reply_msgbuf,NoUser);
+        }  else if (res == USERFILE_ERROR) { 
+            //password is wrong
+            printf("passwd is wrong\n");
+            init_reply(&reply_msgbuf,WrongPasswd);
+        } else {
+            // success
+            printf("Login Success\n");
+            init_reply(&reply_msgbuf,SuccessReply);
+        }
+
+        //reply
+        if( messenger_send(&reply_sender,(void *)&reply_msgbuf, sizeof(chat_message_t)) < 0) {
+            perror("login_thread_func:send reply failure");
+        }
+        messenger_destory(&reply_sender);
+
+        if (res == USERFILE_SUCCESS) {
+            //login success, so we should open the reply sender and add it to
+            //user list
+            strcpy(userbuf.passwd,login_msgbuf.passwd);
+            add_new_user(&userbuf);
+        }
+    }
+
 }
 
 /*****************************************************************/
 /* sendmsg_thread_func */
 
 void *sendmsg_thread_func(void *arg) {
-    printf("register_thread\n");
+    printf("sendmsg_thread_func\n");
 }
 
 
@@ -244,4 +356,17 @@ void cleaner() {
     unlink(config->reg_path);
     unlink(config->login_path);
     unlink(config->sendmsg_path);
+}
+
+/*********************************************************************/
+/* add a new user to our logged in user list */
+
+void add_new_user(user_t *user) {
+    messenger_t user_sender;
+    int res;
+    char userpath[BUFF_SZ];
+    username2path(user.username,userpath,Client); 
+    res = messenger_init(&user_sender,userpath,Sender);
+    if (res != 0) { perror("add_new_user::messenger init failure\n"); }
+
 }
