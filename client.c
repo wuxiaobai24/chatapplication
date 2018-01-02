@@ -35,7 +35,7 @@ config_t *config;
 
 /****************************************************************************/
 enum {
-    Login,Register,SendMsg,ReciveMsg,DoNothing
+    Login,Register,SendMsg,ReciveMsg,DoNothing,Exit
 };
 
 /****************************************************************************/
@@ -58,6 +58,7 @@ void process_input();                   /* process user input */
 void get_register_input(register_message_t *);/* show register prompt and get input */
 void get_login_input(login_message_t *); /* show login prompt and get input */
 void init_logged_in_user(login_message_t *);/* init logged_in_user and user_reciver */
+void create_temp_file();                /* create temp file for temp reciver */
 /**************************************************************************/
 /* main function */
 
@@ -86,8 +87,9 @@ void init() {
     init_sender();
     
     /* init temp reciver */
-    //init_temp_reciver();
-    sprintf(client_temp_name,"Client%d",getpid());
+    create_temp_file();
+
+    user_reciver = (messenger_t*)malloc(sizeof(messenger_t));
     printf("init over\n");
 }
 
@@ -128,12 +130,13 @@ void init_sender() {
 }
 
 /*****************************************************************************/
-/* init temp reciver for client */
-
-void init_temp_reciver() {
+/* just create temp file */
+void create_temp_file() {
     int res;
     char pathbuf[BUFF_SZ];
     
+    //init client temp file name
+    sprintf(client_temp_name,"Client%d",getpid());
     //init the temp file path
     username2path(client_temp_name,pathbuf,Temp);
     printf("temp file:%s\n",pathbuf);
@@ -145,10 +148,19 @@ void init_temp_reciver() {
     signal(SIGKILL, cleaner);
     signal(SIGINT, cleaner);
     signal(SIGTERM, cleaner);
+}
+
+/********************************************************************************/
+/* init temp reciver for client */
+
+void init_temp_reciver() {
+    int res;
+    char pathbuf[BUFF_SZ];
+    //init the temp path
+    username2path(client_temp_name,pathbuf,Temp);
 
     temp_reciver = (messenger_t*)malloc(sizeof(messenger_t));
     if (temp_reciver == NULL) fatalError("init_temp_reciver:malloc failure");
-
 
     res = messenger_init(temp_reciver,pathbuf, Reciver);
     if (res != 0) fatalError("init_temp_reciver: init failure");
@@ -191,6 +203,7 @@ int show_prompt_with_user() {
     
     if(input == 1) return SendMsg;
     else if (input == 2) return ReciveMsg;
+    else if (input == 0) return Exit;
     else return DoNothing;
 }
 
@@ -201,12 +214,14 @@ int show_prompt_without_user() {
     printf("=====================================\n");
     printf("1. Register\n");
     printf("2. Login\n");
+    printf("0. Exit\n");
     printf("=====================================\n");
 
     scanf("%d", &input);
 
     if (input == 1) return Register;
     else if (input == 2) return Login;
+    else if (input == 0) return Exit;
     else return DoNothing;
 }
 
@@ -226,6 +241,8 @@ void process_input(int input) {
         case Login:
             login_user();
             break;
+        case Exit:
+            exit(0);
         case DoNothing:
         default:
             break;
@@ -251,7 +268,7 @@ void register_user() {
     
     printf("send res = %d\n",res);
 
-    if (temp_reciver == NULL) init_temp_reciver();
+    init_temp_reciver();
     //recive msg
     res = messenger_recive(temp_reciver,(void *)&reply_msgbuf,sizeof(chat_message_t));
     printf("recive res = %d\n",res);
@@ -273,6 +290,8 @@ void register_user() {
               printf("Can not parse server reply\n");
               break;
     }
+
+    messenger_destory(temp_reciver);
 }
 
 /*****************************************************************************/
@@ -281,15 +300,23 @@ void register_user() {
 void login_user() {
     login_message_t login_msgbuf;
     chat_message_t reply_msgbuf;
-    int reply;
+    int reply,res;
     //show login prompt and get the input
     get_login_input(&login_msgbuf);
+    
+    strcpy(login_msgbuf.temp_reciver,client_temp_name);
 
     //send login msg
     messenger_send(login_sender,(void*)&login_msgbuf,sizeof(login_message_t));
+    
+    init_temp_reciver();
+
 
     //reciver reply msg
-    messenger_recive(temp_reciver,(void *)&reply_msgbuf,sizeof(chat_message_t));
+    res = messenger_recive(temp_reciver,(void *)&reply_msgbuf,sizeof(chat_message_t));
+    printf("res is %d\n",res);
+
+    message_show(&reply_msgbuf);
 
     reply = parse_server_reply(&reply_msgbuf);
     switch(reply) {
@@ -306,10 +333,13 @@ void login_user() {
         case ServerError:
             printf("Server error, please check server.\n");
             break;
+        case UserIsLoggedIn:
+            printf("User is logged in.\n");
         default:
-            printf("Can not parse server reply\n");
+            printf("Can not parse server reply, reply is %d\n",reply);
             break;
     }
+    messenger_destory(temp_reciver);
 }
 
 /*****************************************************************************/
@@ -354,12 +384,31 @@ void get_register_input(register_message_t *msgbuf) {
 /* show login prompt and get the input */
 
 void get_login_input(login_message_t *msgbuf) {
-
-
+    printf("Please input username\n");
+    scanf("%s",msgbuf->username);
+    printf("Please input password\n");
+    scanf("%s",msgbuf->passwd);
 }
 
 /********************************************************************************/
 /* init logged_in_user and user reciver */
 void init_logged_in_user(login_message_t *userbuf) {
+    char pathbuf[BUFF_SZ];
+    int res;
+
+    user_reciver = (messenger_t*)malloc(sizeof(messenger_t));
+    if (user_reciver == NULL) fatalError("init_logged_in_user:malloc user_reciver");
+
+    username2path(userbuf->username,pathbuf,Client);
+    
+    res = messenger_init(user_reciver,pathbuf,Reciver);
+    printf("messenger_init res is %d\n",res);
+    if (res != 0) fatalError("init_logged_in_user");
+
+    logged_in_user = (user_t*)malloc(sizeof(user_t));
+    if (logged_in_user == NULL) fatalError("init_logged_in_user\n");
+
+    strcpy(logged_in_user->username,userbuf->username);
+    strcpy(logged_in_user->passwd,userbuf->passwd);
 
 }

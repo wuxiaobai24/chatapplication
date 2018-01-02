@@ -38,12 +38,14 @@ int userfile_add_user(userfile_t *userfile, user_t *user) {
 /* search a user in userfile by username */
 int userfile_search_user(userfile_t *userfile, user_t *user) {
     if (userfile == NULL || user == NULL) return USERFILE_ERROR;
-
+    printf("userfile_search_user\n");
     user_t buf;
+    int res;
     pthread_mutex_lock(&userfile->mutex);
     
-
-    if(lseek(userfile->fd,0,SEEK_SET) == -1) return USERFILE_ERROR;
+    res = lseek(userfile->fd,0,SEEK_SET);
+    printf("lseek res is %d\n",res);
+    if (res == -1)  return USERFILE_ERROR;
 
     //search
     while(read(userfile->fd,(void *)&buf,sizeof(user_t)) ) {

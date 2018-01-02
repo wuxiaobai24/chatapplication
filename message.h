@@ -53,7 +53,7 @@ int messenger_recive(messenger_t *messenger,void *messagebuf,size_t message_size
 /* some function and enum which is help for init reply and parse reply */
 
 enum reply_type{
-    SuccessReply = 0, WrongUserName, ServerError,NoUser, WrongPasswd, 
+    SuccessReply = 0, WrongUserName, ServerError,NoUser, WrongPasswd, UserIsLoggedIn, 
     ParseError // the parse error must be the last one, check type will use it
 };
 
@@ -69,5 +69,10 @@ enum userfile_type {
 /* create the userfile , the path will return by username parameter,
  * so please make sure the username have enought space */
 int username2path(char *username,char *path,int type);
+
+
+/***************************************************************************/
+/* show chat message is for debug */
+void message_show(chat_message_t *msg);
 
 #endif

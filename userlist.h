@@ -7,10 +7,10 @@
 /******************************************************************/
 /* RETURN_FLAG */
 #define SUCCESS 0
-#define POINTER_NULL 1
-#define INDEX_ERROR 2
-#define USER_TO_MUCH 3
-#define NOT_FOUND -1
+#define POINTER_NULL -1
+#define INDEX_ERROR -2
+#define USER_TO_MUCH -3
+#define NOT_FOUND -4
 
 
 typedef struct {

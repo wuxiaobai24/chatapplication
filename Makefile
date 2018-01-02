@@ -4,3 +4,7 @@ Make:
 
 cleanfifo:
 	rm ../wukunhan2015170*
+	rm ../data/*t
+cleanuser:
+	rm ../data/*c
+	rm ../data/userfile

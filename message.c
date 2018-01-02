@@ -172,7 +172,6 @@ char *get_reply_message(int reply_type) {
 /* parse the server reply */
 int parse_server_reply(chat_message_t *reply_buf) {
 
-
     int i;
     for(i = 0;i < ParseError;i++) {
         if (strcmp(reply_buf->message,get_reply_message(i)) == 0)
@@ -205,3 +204,8 @@ int username2path(char *username,char *path,int type) {
     return 0;
 }
 
+void message_show(chat_message_t *msg) {
+    printf("Sender:%s\n",msg->sender);
+    printf("Reciver:%s\n",msg->reciver);
+    printf("Message:%s\n",msg->message);
+}

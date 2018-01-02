@@ -57,6 +57,10 @@ void *login_thread_func(void *);    /* login thread function */
 void *register_thread_func(void *); /* register thread function */
 void *sendmsg_thread_func(void *);   /* sendmsg thread function */
 void cleaner();                     /* remove the fifo if signaled */
+void add_new_user(user_t *);        /* add a new user in userlist */
+void create_user_msg_file();        
+
+
 
 /***********************************************************************/
 /* main function */
@@ -232,7 +236,7 @@ void *register_thread_func(void *arg) {
         // recive register message
         printf("Start wait register message\n");
         res = messenger_recive(reg_reciver,&reg_msgbuf,sizeof(register_message_t));
-        if (res < 0) {
+        if (res <= 0) {
             printf("res = %d\n",res);
             perror("register_thread_func:recive failure");
             continue;
@@ -259,6 +263,7 @@ void *register_thread_func(void *arg) {
             init_reply(&reply_msgbuf,SuccessReply);
             strcpy(userbuf.passwd,reg_msgbuf.passwd);
             userfile_add_user(&userfile,&userbuf);
+            create_user_msg_file(&userbuf);
         } else {
             printf("register failure\n");
             init_reply(&reply_msgbuf,WrongUserName);
@@ -280,7 +285,7 @@ void *register_thread_func(void *arg) {
 void *login_thread_func(void *arg) {
     printf("login_thread\n");
 
-    int res;
+    int res,res2;
     login_message_t login_msgbuf;
     chat_message_t reply_msgbuf;
     messenger_t reply_sender;
@@ -290,24 +295,27 @@ void *login_thread_func(void *arg) {
     while(1) {
         printf("Start wait login message\n");
         res = messenger_recive(login_reciver, &login_msgbuf, sizeof(login_message_t));
-        if (res < 0) {
+        if (res <= 0) {
             printf("res = %d\n",res);
             perror("login_thread_func:recive failure");
             continue;
         }
         printf("Recive a login message\n");
 
-        strcpy(userbuf.username, login_msgbuf);
+        strcpy(userbuf.username, login_msgbuf.username);
 
-        //process login message 
+        //check in userfile
         res = userfile_search_user(&userfile, &userbuf);
         if (res == USERFILE_ERROR) {
             printf("login_thread_func:userfile error\n");
             continue;
         }
+        
+        //check in userlist
+        res2 = userlist_search(&userlist,&userbuf);
 
         //init reply sender
-        usernaem2path(reg_msgbuf.temp_reciver, sender_path, Temp);
+        username2path(login_msgbuf.temp_reciver, sender_path, Temp);
         messenger_init(&reply_sender, sender_path,Sender);
 
         //init reply msg
@@ -319,6 +327,9 @@ void *login_thread_func(void *arg) {
             //password is wrong
             printf("passwd is wrong\n");
             init_reply(&reply_msgbuf,WrongPasswd);
+        } else if (res2 > 0) {
+            printf("User is Login\n");
+            init_reply(&reply_msgbuf,UserIsLoggedIn);
         } else {
             // success
             printf("Login Success\n");
@@ -326,9 +337,14 @@ void *login_thread_func(void *arg) {
         }
 
         //reply
-        if( messenger_send(&reply_sender,(void *)&reply_msgbuf, sizeof(chat_message_t)) < 0) {
+        res2 = messenger_send(&reply_sender,(void *)&reply_msgbuf, sizeof(chat_message_t));
+        printf("messender_send res is %d\n",res2);
+        if (res2 < 0) {
             perror("login_thread_func:send reply failure");
         }
+
+        message_show(&reply_msgbuf);
+        
         messenger_destory(&reply_sender);
 
         if (res == USERFILE_SUCCESS) {
@@ -365,8 +381,24 @@ void add_new_user(user_t *user) {
     messenger_t user_sender;
     int res;
     char userpath[BUFF_SZ];
-    username2path(user.username,userpath,Client); 
+    
+    // if we don't do it, the client will block in reciver init.
+    username2path(user->username,userpath,Client); 
     res = messenger_init(&user_sender,userpath,Sender);
-    if (res != 0) { perror("add_new_user::messenger init failure\n"); }
+    if (res != 0)
+        perror("add_new_user::messenger init failure\n");
+    else 
+        messenger_destory(&user_sender);
+    
+    userlist_add(&userlist,user);
+}
 
+/**************************************************************/
+/* create user's file for send message */
+
+void create_user_msg_file(user_t *user) {
+    int res;
+    char userpath[BUFF_SZ];
+    username2path(user->username,userpath,Client);
+    mkfifo(userpath,0777);
 }
