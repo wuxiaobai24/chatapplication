@@ -59,6 +59,12 @@ void get_register_input(register_message_t *);/* show register prompt and get in
 void get_login_input(login_message_t *); /* show login prompt and get input */
 void init_logged_in_user(login_message_t *);/* init logged_in_user and user_reciver */
 void create_temp_file();                /* create temp file for temp reciver */
+void get_sendmsg_input();               /* show the prompt and get input */
+
+
+
+
+
 /**************************************************************************/
 /* main function */
 
@@ -335,6 +341,7 @@ void login_user() {
             break;
         case UserIsLoggedIn:
             printf("User is logged in.\n");
+            break;
         default:
             printf("Can not parse server reply, reply is %d\n",reply);
             break;
@@ -346,14 +353,72 @@ void login_user() {
 /* recive msg */
 
 void recive_msg() {
-
+    int res,i;
+    chat_message_t msgbuf;
+    int read = 0;
+    for(i = 0,res = 0;i < 100 && read != sizeof(chat_message_t);i++) {
+        res = messenger_recive(user_reciver,&msgbuf + res,sizeof(chat_message_t));
+        read += res;
+        if (read != 0) {
+            printf("read is %d\n",read);
+            i = 0;
+        }
+    }
+    if (res > 0) {
+        printf("======================================\n");
+        printf("Sender:%s\n",msgbuf.sender);
+        printf("Reciver:%s\n",msgbuf.reciver);
+        printf("Message:%s\n",msgbuf.message);
+        printf("======================================\n");
+    }
 }
 
 /*******************************************************************************/
 /* send message */
 
 void send_msg() {
+    printf("send_msg\n");
+    chat_message_t msgbuf;
+    int res = 0;
 
+    //show send_msg prompt and get the input
+    get_sendmsg_input(&msgbuf);
+    strcpy(msgbuf.sender,logged_in_user->username);
+    
+    res = messenger_send(msg_sender,&msgbuf,sizeof(chat_message_t));
+    if (res <= 0) {
+        perror("send_msg failure"); return;
+    }
+
+    //because the user_reciver become not block.
+    res = 0;
+    while(res <= 0) {
+        res = messenger_recive(user_reciver,&msgbuf,sizeof(chat_message_t));
+    }
+    
+    printf("Server reply\n");
+    message_show(&msgbuf);
+
+    res = parse_server_reply(&msgbuf);
+    switch(res) {
+        //in fact, WrongSender will not be return in our application.
+        case WrongSender:
+            printf("sender is wrong, maybe client have some bug\n");
+            break;
+        case UserIsNotLoggedIn:
+            printf("You are not login!\n");
+            break;
+        case WrongReciver:
+            printf("Reciver is not exist.\n");
+            break;
+        case SuccessReply:
+            printf("Send message success.\n");
+            break;
+        case ParseError:
+            printf("Parse reply error.\n");
+            message_show(&msgbuf);
+            break;
+    }
 }
 
 /*****************************************************************************/
@@ -410,5 +475,15 @@ void init_logged_in_user(login_message_t *userbuf) {
 
     strcpy(logged_in_user->username,userbuf->username);
     strcpy(logged_in_user->passwd,userbuf->passwd);
+}
 
+/*********************************************************************************/
+/* show send msg prompt and get the input */
+void get_sendmsg_input(chat_message_t *msgbuf) {
+    printf("===========================================\n");
+    printf("Reciver:\n");
+    scanf("%s",msgbuf->reciver);
+    printf("Message:\n");
+    scanf("%s",msgbuf->message);
+    printf("===========================================\n");
 }

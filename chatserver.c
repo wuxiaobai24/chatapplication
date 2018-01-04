@@ -59,8 +59,8 @@ void *sendmsg_thread_func(void *);   /* sendmsg thread function */
 void cleaner();                     /* remove the fifo if signaled */
 void add_new_user(user_t *);        /* add a new user in userlist */
 void create_user_msg_file();        
-
-
+int sendmsg2user(chat_message_t *msg,char *username);
+void process_chat_msg(chat_message_t *msg);
 
 /***********************************************************************/
 /* main function */
@@ -327,7 +327,7 @@ void *login_thread_func(void *arg) {
             //password is wrong
             printf("passwd is wrong\n");
             init_reply(&reply_msgbuf,WrongPasswd);
-        } else if (res2 > 0) {
+        } else if (res2 >= 0) {
             printf("User is Login\n");
             init_reply(&reply_msgbuf,UserIsLoggedIn);
         } else {
@@ -338,7 +338,7 @@ void *login_thread_func(void *arg) {
 
         //reply
         res2 = messenger_send(&reply_sender,(void *)&reply_msgbuf, sizeof(chat_message_t));
-        printf("messender_send res is %d\n",res2);
+        printf("messenger_send res is %d\n",res2);
         if (res2 < 0) {
             perror("login_thread_func:send reply failure");
         }
@@ -362,6 +362,18 @@ void *login_thread_func(void *arg) {
 
 void *sendmsg_thread_func(void *arg) {
     printf("sendmsg_thread_func\n");
+    int res;
+    chat_message_t msgbuf;
+
+    while(1) {
+        res = messenger_recive(msg_reciver,&msgbuf,sizeof(chat_message_t));
+        if (res <= 0) continue;
+
+        //a new message should be process.
+        process_chat_msg(&msgbuf);
+
+    }
+
 }
 
 
@@ -401,4 +413,67 @@ void create_user_msg_file(user_t *user) {
     char userpath[BUFF_SZ];
     username2path(user->username,userpath,Client);
     mkfifo(userpath,0777);
+}
+
+/***********************************************************/
+/* process chat message */
+
+void process_chat_msg(chat_message_t *msg) {
+    if (msg == NULL) return;
+    user_t userbuf;
+    chat_message_t reply_msg;
+    int res,res2;
+    
+    //check sender userlist
+    strcpy(userbuf.username,msg->sender);
+    res = userlist_search(&userlist,&userbuf);
+    if (res < 0) return; //wrong message, ignore.
+
+    //check reciver in  userfile.
+    strcpy(userbuf.username,msg->reciver);
+    res = userfile_search_user(&userfile, &userbuf);
+    if (res == USERFILE_ERROR) perror("process_chat_msg:userfile_search_user");
+     
+
+    if (res == USERFILE_NO_USER) {
+        // reciver is wrong
+        printf("chat-reciver is wrong\n");
+        init_reply(&reply_msg, WrongReciver);
+        sendmsg2user(&reply_msg, msg->sender);
+        return ;
+    }
+    printf("chat-SuccessReply");
+    init_reply(&reply_msg, SuccessReply);
+    printf("Send to msg->sender\n");
+    sendmsg2user(&reply_msg,msg->sender);
+    printf("Send to msg->reciver\n");
+    sendmsg2user(msg,msg->reciver);
+}
+
+
+/*************************************************************/
+/* search user form userfile by username, and send msg to this user */
+
+int sendmsg2user(chat_message_t *msg,char *username) {
+    /* search user in userfile */
+    int res;
+    char path[BUFF_SZ];
+    messenger_t user_sender;
+    user_t userbuf;
+    strcpy(userbuf.username,username);
+    res = userfile_search_user(&userfile,&userbuf);
+    if (res != 0) return -1;
+    
+    username2path(username,path,Client);
+    printf("sendmsg2user userpath is %s\n",path);
+    printf("message is \n");
+    message_show(msg);
+    res = messenger_init(&user_sender,path,Sender);
+    if (res != 0) {
+        perror("sendmsg2user::messenger init failure\n"); return 1;
+    }
+    res = messenger_send(&user_sender,msg,sizeof(chat_message_t));
+    printf("send2user send res is %d\n",res);
+    messenger_destory(&user_sender);
+    return 0;
 }

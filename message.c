@@ -4,10 +4,12 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <stdlib.h>
 #include "message.h"
-
 /* messenger version */
-#define FIFO
 
 /***************************************************************************/
 /* some local function declaration */
@@ -20,6 +22,14 @@ int sender_init_fifo(messenger_t *messenger, char *path);
 int messenger_destory_fifo(messenger_t *messenger);
 int messenger_send_fifo(messenger_t *messenger, void *message,size_t message_size);
 int messenger_recive_fifo(messenger_t *messenger,void *messagebuf,size_t message_size);
+
+/* msg queue version */
+int reciver_init_msgqueue(messenger_t *messenger, char *parh);
+int sender_init_msgqueue(messenger_t *messenger, char *path);
+int messenger_destory_msgqueue(messenger_t *messenger);
+int messenger_send_msgqueue(messenger_t *messenger, void *message, size_t message_size);
+int messenger_recive_msgqueue(messenger_t *messenger, void *message, size_t message_size);
+
 /**********************************************************************/
 /* init the messenger */
 int messenger_init(messenger_t *messenger, char *path, int type) {
@@ -28,9 +38,17 @@ int messenger_init(messenger_t *messenger, char *path, int type) {
     if (messenger == NULL || path == NULL) return NULL_POINTER;
 
     messenger->type = type;
+#ifdef FIFO_VERSION
     if (type == Reciver) return reciver_init_fifo(messenger,path);
     else if (type == Sender) return sender_init_fifo(messenger,path);
     else return ERROR_TYPE;
+#endif
+
+#ifdef MSGQUEUE_VERSION
+    if (type == Reciver) return reciver_init_msgqueue(messenger,path);
+    else if (type == Sender) return sender_init_msgqueue(messenger,path);
+    else return ERROR_TYPE;
+#endif
 }
 
 /**********************************************************************/
@@ -40,7 +58,14 @@ int messenger_destory(messenger_t *messenger) {
     if (messenger == NULL) return NULL_POINTER;
     
     int res;
+#ifdef FIFO_VERSION
     res = messenger_destory_fifo(messenger);
+#endif
+
+#ifdef MSGQUEUE_VERSION
+    res = messenger_destory_msgqueue(messenger);
+#endif
+
     if (res != 0) return res;
 
     messenger->type = -1;
@@ -53,8 +78,12 @@ int messenger_send(messenger_t *messenger,void *message,size_t message_size) {
     /* check parameter */
     if (messenger == NULL || message == NULL) return NULL_POINTER;
     if (messenger->type != Sender) return ERROR_TYPE;
-    printf("Send message\n");
+#ifdef FIFO_VERSION
     return messenger_send_fifo(messenger,message,message_size);
+#endif
+#ifdef MSGQUEUE_VERSION
+    return messenger_send_msgqueue(messenger,message,message_size);
+#endif
 }
 
 /**********************************************************************/
@@ -63,8 +92,15 @@ int messenger_recive(messenger_t *messenger, void *messagebuf, size_t message_si
     /* check parameter */
     if (messenger == NULL || messagebuf == NULL) return NULL_POINTER;
     if (messenger->type != Reciver) return ERROR_TYPE;
-    printf("Recive message\n");
+
+#ifdef FIFO_VERSION
     return messenger_recive_fifo(messenger,messagebuf,message_size);
+#endif
+
+#ifdef MSGQUEUE_VERSION
+    return messenger_recive_msgqueue(messenger,messagebuf,message_size);
+#endif
+
 }
 
 
@@ -163,6 +199,12 @@ char *get_reply_message(int reply_type) {
             return "NoUser";
         case WrongPasswd:
             return "WrongPasswd";
+        case WrongSender:
+            return "WrongSender";
+        case UserIsNotLoggedIn:
+            return "UserIsNotLoggedIn";
+        case WrongReciver:
+            return "WrongReciver";
         default: //ParseError
             return "ParseError";
     }
@@ -208,4 +250,69 @@ void message_show(chat_message_t *msg) {
     printf("Sender:%s\n",msg->sender);
     printf("Reciver:%s\n",msg->reciver);
     printf("Message:%s\n",msg->message);
+}
+
+
+
+/**********************************************************************/
+/* message queue version */
+
+/**********************************************************************/
+/* init a reciver -- msg queue version */
+int reciver_init_msgqueue(messenger_t *messenger, char *path) {
+    int res;
+    key_t key = ftok(path,'a');
+    res = msgget(key,IPC_CREAT | 0666);
+    if (res == -1) return FATAL_ERROR;
+
+    messenger->id = res;
+    return 0;
+}
+
+/*********************************************************************/
+/* init a sender -- msg queue version */
+
+int sender_init_msgqueue(messenger_t *messenger, char *path) {
+    //just call reciver init
+    return reciver_init_msgqueue(messenger,path);
+}
+
+/********************************************************************/
+/* destory messenger -- msg queue version */
+int messenger_destory_msgqueue(messenger_t *messenger) {
+    /* maybe we shouldn't delete the msgqueue */
+    
+//    msgctl(messenger->id, IPC_RMID, 0);
+
+    return 0;
+}
+
+#define HELPER_SIZE 300
+
+typedef struct {
+    long type;
+    char data[HELPER_SIZE];
+} msgqueue_helper;
+
+
+/**********************************************************************/
+/* send a message -- msg queue version */
+int messenger_send_msgqueue(messenger_t *messenger, void *message, size_t msg_size) {
+
+    /* msgsnd success will return 0, not message size, so we should do
+     * something , make it like fifo */
+    printf("send msg, id is %d\n",messenger->id);
+    ((chat_message_t*)message)->msgqueue_type = 1;
+    int res = msgsnd(messenger->id, message, HELPER_SIZE, 0);
+    if (res == -1) return -1;
+    return msg_size;
+}
+
+/**********************************************************************/
+/* recive s message -- msg queue version */
+int messenger_recive_msgqueue(messenger_t *messenger, void *message, size_t msg_size) {
+    printf("reciver msg, id is %d,msg_size is %lu\n",messenger->id,msg_size);
+    int res = msgrcv(messenger->id, message, HELPER_SIZE, 0, 0);
+    if (res == HELPER_SIZE) return msg_size;
+    return res;
 }

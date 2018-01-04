@@ -44,7 +44,6 @@ int userfile_search_user(userfile_t *userfile, user_t *user) {
     pthread_mutex_lock(&userfile->mutex);
     
     res = lseek(userfile->fd,0,SEEK_SET);
-    printf("lseek res is %d\n",res);
     if (res == -1)  return USERFILE_ERROR;
 
     //search

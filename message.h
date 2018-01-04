@@ -1,5 +1,9 @@
 #ifndef _MESSAGE_H
 #define _MESSAGE_H
+#include <sys/types.h>
+
+//#define FIFO_VERSION
+#define MSGQUEUE_VERSION
 
 #define MESSAGE_BUFFER_SZ 100
 
@@ -24,6 +28,9 @@ typedef struct {
 }messenger_t;
 
 typedef struct {
+#ifdef MSGQUEUE_VERSION
+    long msgqueue_type;
+#endif
     char username[MESSAGE_BUFFER_SZ];
     char passwd[MESSAGE_BUFFER_SZ];
     char temp_reciver[MESSAGE_BUFFER_SZ];
@@ -33,6 +40,9 @@ typedef struct {
 typedef register_message_t login_message_t;
 
 typedef struct {
+#ifdef MSGQUEUE_VERSION
+    long msgqueue_type;
+#endif
     char sender[MESSAGE_BUFFER_SZ];
     char reciver[MESSAGE_BUFFER_SZ];
     char message[MESSAGE_BUFFER_SZ];
@@ -53,7 +63,8 @@ int messenger_recive(messenger_t *messenger,void *messagebuf,size_t message_size
 /* some function and enum which is help for init reply and parse reply */
 
 enum reply_type{
-    SuccessReply = 0, WrongUserName, ServerError,NoUser, WrongPasswd, UserIsLoggedIn, 
+    SuccessReply = 0, WrongUserName, ServerError,NoUser, WrongPasswd, UserIsLoggedIn,
+    WrongSender,UserIsNotLoggedIn,WrongReciver,  
     ParseError // the parse error must be the last one, check type will use it
 };
 
