@@ -16,7 +16,7 @@
 #define USERFILE_PATH "/home/wukunhan2015170297/chatapplication/data/userfile"
 
 /* if define DEBUG, the server will not call the become_daemon */
-#define DEBUG
+//#define DEBUG
 
 #define TRUE 1
 #define FALSE 0
@@ -25,10 +25,10 @@
 /* global value */
 userfile_t userfile; /* user list */
 userlist_t userlist; /* logined user list */
-int logined_users_max = 1000;
 
 /* server config */
 config_t *config;
+int logined_users_max = 1000;
 
 /* messager */
 messenger_t *reg_reciver;
@@ -115,11 +115,12 @@ void configuration() {
     if (config == NULL) fatalError("malloc config failure");
 
     res = config_parse(CONFIGURATIONFILE_PATH,config);
-
+    
     printf("register_file_path is %s\n",config->reg_path);
     printf("login_file_path is %s\n",config->login_path);
     printf("sendmsg_file_path is %s\n",config->sendmsg_path);
     printf("logined_users_max is %d\n",config->max_user);
+    logined_users_max = config->max_user;
     if (res != 0) {
         fprintf(stderr,"config_parse error\n");
         exit(-1);
@@ -317,7 +318,7 @@ void *login_thread_func(void *arg) {
         //init reply sender
         username2path(login_msgbuf.temp_reciver, sender_path, Temp);
         messenger_init(&reply_sender, sender_path,Sender);
-
+        printf("userlist.user_len is %d\nuserfile.max_users is %d\n",userlist.user_len,userlist.max_users);
         //init reply msg
         if (res == USERFILE_NO_USER) {
             // no user
@@ -330,7 +331,11 @@ void *login_thread_func(void *arg) {
         } else if (res2 >= 0) {
             printf("User is Login\n");
             init_reply(&reply_msgbuf,UserIsLoggedIn);
-        } else {
+        }
+        else if (userlist.user_len >= userlist.max_users) {
+            printf("Userlist is full");
+            init_reply(&reply_msgbuf,UserIsTooMuch);
+        }else {
             // success
             printf("Login Success\n");
             init_reply(&reply_msgbuf,SuccessReply);

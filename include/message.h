@@ -64,7 +64,7 @@ int messenger_recive(messenger_t *messenger,void *messagebuf,size_t message_size
 
 enum reply_type{
     SuccessReply = 0, WrongUserName, ServerError,NoUser, WrongPasswd, UserIsLoggedIn,
-    WrongSender,UserIsNotLoggedIn,WrongReciver,  
+    WrongSender,UserIsNotLoggedIn,WrongReciver, UserIsTooMuch,
     ParseError // the parse error must be the last one, check type will use it
 };
 

@@ -270,14 +270,15 @@ void register_user() {
     strcpy(reg_msgbuf.temp_reciver ,client_temp_name);
 
     //send reg msg
+   // printf("reg msg-t size is %lu\n",sizeof(register_message_t));
     res = messenger_send(reg_sender,(void*)&reg_msgbuf,sizeof(register_message_t));
     
-    printf("send res = %d\n",res);
+  //  printf("send res = %d\n",res);
 
     init_temp_reciver();
     //recive msg
     res = messenger_recive(temp_reciver,(void *)&reply_msgbuf,sizeof(chat_message_t));
-    printf("recive res = %d\n",res);
+//    printf("recive res = %d\n",res);
 
     //parse reply
     reply = parse_server_reply(&reply_msgbuf);
@@ -320,9 +321,9 @@ void login_user() {
 
     //reciver reply msg
     res = messenger_recive(temp_reciver,(void *)&reply_msgbuf,sizeof(chat_message_t));
-    printf("res is %d\n",res);
+    //printf("res is %d\n",res);
 
-    message_show(&reply_msgbuf);
+    //message_show(&reply_msgbuf);
 
     reply = parse_server_reply(&reply_msgbuf);
     switch(reply) {
@@ -342,6 +343,9 @@ void login_user() {
         case UserIsLoggedIn:
             printf("User is logged in.\n");
             break;
+        case UserIsTooMuch:
+            printf("Server have too much logged in users.\n");
+            break;
         default:
             printf("Can not parse server reply, reply is %d\n",reply);
             break;
@@ -360,7 +364,7 @@ void recive_msg() {
         res = messenger_recive(user_reciver,&msgbuf + res,sizeof(chat_message_t));
         read += res;
         if (read != 0) {
-            printf("read is %d\n",read);
+     //       printf("read is %d\n",read);
             i = 0;
         }
     }
@@ -377,7 +381,7 @@ void recive_msg() {
 /* send message */
 
 void send_msg() {
-    printf("send_msg\n");
+//    printf("send_msg\n");
     chat_message_t msgbuf;
     int res = 0;
 
@@ -396,8 +400,8 @@ void send_msg() {
         res = messenger_recive(user_reciver,&msgbuf,sizeof(chat_message_t));
     }
     
-    printf("Server reply\n");
-    message_show(&msgbuf);
+  //  printf("Server reply\n");
+   // message_show(&msgbuf);
 
     res = parse_server_reply(&msgbuf);
     switch(res) {
@@ -467,7 +471,7 @@ void init_logged_in_user(login_message_t *userbuf) {
     username2path(userbuf->username,pathbuf,Client);
     
     res = messenger_init(user_reciver,pathbuf,Reciver);
-    printf("messenger_init res is %d\n",res);
+    //printf("messenger_init res is %d\n",res);
     if (res != 0) fatalError("init_logged_in_user");
 
     logged_in_user = (user_t*)malloc(sizeof(user_t));

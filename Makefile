@@ -4,9 +4,9 @@ SC=-c $<
 OBJ=-o $@
 THREAD=-pthread
 
-application:bin/chatserver bin/client
+application:bin/wukunhan2015170297Server bin/client
 	
-bin/chatserver:obj/chatserver.o obj/userlist.o obj/config.o obj/message.o obj/userfile.o
+bin/wukunhan2015170297Server:obj/chatserver.o obj/userlist.o obj/config.o obj/message.o obj/userfile.o
 	$(CC) $(OBJ) $^ $(THREAD)
 
 bin/client:obj/client.o obj/config.o obj/message.o
@@ -40,3 +40,7 @@ cleanfifo:
 cleanuser:
 	rm ../data/*c
 	rm ../data/userfile
+
+clean:
+	rm ./bin/*
+	rm ./obj/*

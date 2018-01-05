@@ -81,6 +81,7 @@ int messenger_send(messenger_t *messenger,void *message,size_t message_size) {
 #ifdef FIFO_VERSION
     return messenger_send_fifo(messenger,message,message_size);
 #endif
+
 #ifdef MSGQUEUE_VERSION
     return messenger_send_msgqueue(messenger,message,message_size);
 #endif
@@ -124,7 +125,7 @@ int reciver_init_fifo(messenger_t *messenger, char *path) {
 //    if (res != 0) return FATAL_ERROR;
 
     /* open fifo */
-    printf("Open read fifo:%s\n",path);
+  //  printf("Open read fifo:%s\n",path);
     res = open(path, O_RDONLY);
     if (res == -1) return FATAL_ERROR;
 
@@ -161,12 +162,14 @@ int messenger_destory_fifo(messenger_t *messenger) {
 /*******************************************************************/
 /* send message -- fifo version */
 int messenger_send_fifo(messenger_t *messenger,void *message,size_t message_size) {
+  //  printf("fifo send\n");
     return write(messenger->id,message,message_size);
 }
 
 /********************************************************************/
 /* recive message -- fifo version */
 int messenger_recive_fifo(messenger_t *messenger, void *messagebuf,size_t message_size) {
+    //printf("fifo recive\n");
     return read(messenger->id,messagebuf,message_size);
 }
 
@@ -205,6 +208,8 @@ char *get_reply_message(int reply_type) {
             return "UserIsNotLoggedIn";
         case WrongReciver:
             return "WrongReciver";
+        case UserIsTooMuch:
+            return "UserIsTooMuch";
         default: //ParseError
             return "ParseError";
     }
@@ -228,7 +233,7 @@ int parse_server_reply(chat_message_t *reply_buf) {
 int username2path(char *username,char *path,int type) {
     if (username == NULL) return NULL_POINTER;
         
-    printf("username2path:username = %s\n",username);
+//    printf("username2path:username = %s\n",username);
 
     switch (type) {
         case Client:
@@ -301,7 +306,7 @@ int messenger_send_msgqueue(messenger_t *messenger, void *message, size_t msg_si
 
     /* msgsnd success will return 0, not message size, so we should do
      * something , make it like fifo */
-    printf("send msg, id is %d\n",messenger->id);
+//    printf("send msg, id is %d\n",messenger->id);
     ((chat_message_t*)message)->msgqueue_type = 1;
     int res = msgsnd(messenger->id, message, HELPER_SIZE, 0);
     if (res == -1) return -1;
@@ -311,7 +316,8 @@ int messenger_send_msgqueue(messenger_t *messenger, void *message, size_t msg_si
 /**********************************************************************/
 /* recive s message -- msg queue version */
 int messenger_recive_msgqueue(messenger_t *messenger, void *message, size_t msg_size) {
-    printf("reciver msg, id is %d,msg_size is %lu\n",messenger->id,msg_size);
+//    printf("reciver msg, id is %d,msg_size is %lu\n",messenger->id,msg_size);
+//    printf("message_size is %lu\n",sizeof(chat_message_t));
     int res = msgrcv(messenger->id, message, HELPER_SIZE, 0, 0);
     if (res == HELPER_SIZE) return msg_size;
     return res;

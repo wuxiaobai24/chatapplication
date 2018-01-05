@@ -116,6 +116,7 @@ int userlist_search(userlist_t *userlist,user_t *user) {
             break;
     }
     if (i == userlist->user_len) i = NOT_FOUND;
+
     pthread_mutex_unlock(&userlist->mutex);
 
     return i;
